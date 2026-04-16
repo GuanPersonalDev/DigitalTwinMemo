@@ -83,3 +83,55 @@ created: 2026-04-16
 - `!lint` - 健康度檢查
 - `!index` - 顯示索引
 - `!log` - 顯示日誌
+
+## [2026-04-16] ingest | 批次攝入 5 篇數位孿生相關文章
+
+### 來源清單
+
+1. **Digital twin: Data exploration, architecture, implementation and future**
+   - 類型：學術論文（PMC）
+   - 重點：六大領域資料處理流程
+
+2. **Digital twin driven smart factories (Edge AI + FL)**
+   - 類型：學術論文（Nature）
+   - 重點：邊緣運算 + 聯邦學習框架
+
+3. **NVIDIA Omniverse: $50T Physical AI Operating System**
+   - 類型：技術文章
+   - 重點：Omniverse 企業應用與成效
+
+4. **NVIDIA Unveils 'Mega' Omniverse Blueprint**
+   - 類型：官方公告（CES 2025）
+   - 重點：工業機器人車隊數位孿生
+
+5. **Paving the Future of Factories with NVIDIA Omniverse**
+   - 類型：案例研究
+   - 重點：BMW 工廠數位孿生實踐
+
+### 建立的頁面
+
+**來源摘要（5 篇）**：
+- `sources/digital-twin-data-exploration.md`
+- `sources/digital-twin-edge-ai-federated-learning.md`
+- `sources/nvidia-omniverse-50t-physical-ai.md`
+- `sources/nvidia-mega-omniverse-blueprint.md`
+- `sources/bmw-omniverse-enterprise.md`
+
+**新增概念（2 個）**：
+- `concepts/Edge AI.md`
+- `concepts/Federated Learning.md`
+
+**新增實體（1 個）**：
+- `entities/NVIDIA Isaac.md`
+
+**更新頁面**：
+- `concepts/數位孿生.md` - 加入正式定義、架構、應用場景
+- `entities/NVIDIA Omniverse.md` - 加入企業案例、技術需求、生態系統
+
+### 關鍵發現
+
+- 數位孿生的標準定義與歷史（NASA 阿波羅任務）
+- Edge AI + FL 可降低延遲 35%、雲端使用 28%
+- Omniverse 已有 252+ 企業部署，效率提升 30-70%
+- BMW 31 間工廠使用 Omniverse，規劃效率提升 30%
+- Mega Blueprint 為機器人車隊提供參考架構
