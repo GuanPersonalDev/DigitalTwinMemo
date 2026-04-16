@@ -1,0 +1,15 @@
+# Obsidian
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/plugins/*/data.json
+.obsidian/hotkeys.json
+.obsidian/appearance.json
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Temporary files
+*.tmp
+*.swp
+*~
