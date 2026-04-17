@@ -135,3 +135,44 @@ created: 2026-04-16
 - Omniverse 已有 252+ 企業部署，效率提升 30-70%
 - BMW 31 間工廠使用 Omniverse，規劃效率提升 30%
 - Mega Blueprint 為機器人車隊提供參考架構
+
+## [2026-04-17] analyze | 分析 factory-floor-digital-twin 專案
+
+來源：https://github.com/GuanPersonalDev/factory-floor-digital-twin
+
+### 專案分析
+
+ROS2 工廠機台模擬專案，使用 Python 和 rclpy 實作：
+- 3 台機台的感測器資料模擬
+- 定時發布到 ROS2 topic
+- JSON 格式的狀態訊息
+
+### 建立/更新頁面
+
+**新增來源**：
+- `sources/factory-floor-digital-twin.md` - 專案文件與架構分析
+
+**新增綜合分析**：
+- `synthesis/Python-語法技巧.md` - Python 語法模式
+  - 字典推導式、f-string、round()、json 模組
+
+**更新累積式頁面**：
+- `entities/rclpy.md` - 加入專案實例程式碼
+- `synthesis/ROS2-Python-模式.md` - 加入完整 MachinePublisher 範例
+
+### 提取的 API 與語法
+
+**ROS2/rclpy API**：
+- `rclpy.init()`, `rclpy.spin()`, `rclpy.shutdown()`
+- `Node.__init__()`, `create_publisher()`, `create_timer()`
+- `get_logger().info()`, `publisher.publish()`
+
+**Python 標準庫**：
+- `json.dumps()` - 字典轉 JSON
+- `random.uniform()`, `random.choice()` - 隨機數生成
+- `round()` - 數值四捨五入
+
+**Python 語法技巧**：
+- 字典推導式建立多個 Publisher
+- f-string 動態生成 topic 名稱
+- `.items()` 遍歷字典

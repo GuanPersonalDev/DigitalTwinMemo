@@ -24,6 +24,7 @@ updated: 2026-04-16
 | [[sources/nvidia-omniverse-50t-physical-ai\|Omniverse 50T 物理 AI]] | Omniverse 作為物理 AI 作業系統的完整介紹 | 2025-08 |
 | [[sources/nvidia-mega-omniverse-blueprint\|Mega Omniverse Blueprint]] | 工業機器人車隊數位孿生的參考架構 | 2025-01 |
 | [[sources/bmw-omniverse-enterprise\|BMW 案例研究]] | BMW 使用 Omniverse 打造未來工廠 | - |
+| [[sources/factory-floor-digital-twin\|factory-floor-digital-twin]] | 個人專案：ROS2 工廠機台模擬 | 2026-04 |
 
 ## 概念 (Concepts)
 
@@ -48,6 +49,7 @@ updated: 2026-04-16
 | 分析 | 主題 | 日期 |
 |------|------|------|
 | [[synthesis/ROS2-Python-模式\|ROS2 Python 模式]] | 程式碼模式與範例 | 2026-04-16 |
+| [[synthesis/Python-語法技巧\|Python 語法技巧]] | ROS2 開發常用語法 | 2026-04-17 |
 
 ---
 
@@ -69,11 +71,12 @@ updated: 2026-04-16
 ### 程式碼參考
 - [[entities/rclpy\|rclpy]]
 - [[synthesis/ROS2-Python-模式\|ROS2 Python 模式]]
+- [[synthesis/Python-語法技巧\|Python 語法技巧]]
 
 ## 統計
 
-- 來源數量：5
+- 來源數量：6
 - 概念頁面：4
 - 實體頁面：4
-- 綜合分析：1
-- 最後更新：2026-04-16
+- 綜合分析：2
+- 最後更新：2026-04-17
