@@ -176,3 +176,31 @@ ROS2 工廠機台模擬專案，使用 Python 和 rclpy 實作：
 - 字典推導式建立多個 Publisher
 - f-string 動態生成 topic 名稱
 - `.items()` 遍歷字典
+
+## [2026-04-17] ingest | 攝入 ROS2/Isaac Sim 工作流程教學
+
+來源：https://samyooole.github.io/blog/jekyll/2025/01/11/isaacsim.html
+
+### 選擇原因
+
+根據目前學習狀態推薦：
+- 已有 ROS2 Python 基礎（factory-floor-digital-twin 專案）
+- 已了解數位孿生概念
+- 下一步需要學習視覺化整合
+
+此教學正好銜接 ROS2 與 Isaac Sim，是實現數位孿生視覺化的關鍵步驟。
+
+### 建立/更新頁面
+
+**新增來源**：
+- `sources/ros2-isaacsim-workflow.md` - 完整七步驟工作流程
+
+**更新實體**：
+- `entities/NVIDIA Isaac.md` - 加入系統需求、ROS2 整合方式
+
+### 關鍵內容
+
+- 系統需求：Ubuntu 22.04 + ROS2 Humble
+- 七步驟流程：安裝 → 環境 → 參數 → 馬達 → 感測器 → Package → 控制碼
+- Action Graphs：視覺化腳本介面
+- Sim2Real：先模擬後部署的策略

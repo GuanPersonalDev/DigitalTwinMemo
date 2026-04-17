@@ -25,6 +25,7 @@ updated: 2026-04-16
 | [[sources/nvidia-mega-omniverse-blueprint\|Mega Omniverse Blueprint]] | 工業機器人車隊數位孿生的參考架構 | 2025-01 |
 | [[sources/bmw-omniverse-enterprise\|BMW 案例研究]] | BMW 使用 Omniverse 打造未來工廠 | - |
 | [[sources/factory-floor-digital-twin\|factory-floor-digital-twin]] | 個人專案：ROS2 工廠機台模擬 | 2026-04 |
+| [[sources/ros2-isaacsim-workflow\|ROS2/Isaac Sim 工作流程]] | ROS2 與 Isaac Sim 整合教學 | 2025-01 |
 
 ## 概念 (Concepts)
 
@@ -75,7 +76,7 @@ updated: 2026-04-16
 
 ## 統計
 
-- 來源數量：6
+- 來源數量：7
 - 概念頁面：4
 - 實體頁面：4
 - 綜合分析：2
