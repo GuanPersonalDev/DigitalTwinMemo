@@ -251,3 +251,12 @@ Web Dashboard / Omniverse / 其他系統
 **Python 技巧**：
 - Lambda 預設參數捕捉迴圈變數：`lambda msg, t=topic: fn(msg, t)`
 - 組態模組模式：`from config import SETTINGS`
+
+## [2026-04-18] update | 擴充 create_subscription 說明
+
+在 `entities/rclpy.md` 中擴充 `create_subscription` 的詳細說明：
+- 語法與參數說明
+- 與 Publisher 的對比
+- 執行流程圖
+- 基本用法與動態建立範例
+- 回呼函式簽名

@@ -2,7 +2,7 @@
 title: rclpy
 type: entity
 created: 2026-04-16
-updated: 2026-04-16
+updated: 2026-04-18
 sources: [factory-floor-digital-twin]
 tags: [函式庫, ROS2, Python]
 ---
@@ -55,13 +55,74 @@ publisher = self.create_publisher(String, '/topic', 10)
 |------|------|------|
 | `publish(msg)` | 發布訊息到 topic | `publisher.publish(msg)` |
 
-### Subscription 物件
+### Subscription 物件（create_subscription）
+
+訂閱 topic 並接收訊息的方法，與 `create_publisher` 相對應。
+
+#### 語法
 
 ```python
-# 基本用法
-self.create_subscription(String, '/topic', self.callback, 10)
+self.create_subscription(
+    msg_type,      # 訊息類型（如 String, Float32）
+    topic,         # 要訂閱的 topic 名稱
+    callback,      # 收到訊息時呼叫的函式
+    qos            # 服務品質（佇列深度）
+)
+```
 
-# 動態建立多個 subscription（使用 lambda 捕捉變數）
+#### 參數說明
+
+| 參數 | 類型 | 說明 |
+|------|------|------|
+| `msg_type` | class | 訊息類別，如 `String`, `Float32` |
+| `topic` | str | topic 路徑，如 `"/factory/machine_01/status"` |
+| `callback` | callable | 收到訊息時執行的回呼函式 |
+| `qos` | int | 佇列深度，通常用 `10` |
+
+#### 與 Publisher 的對比
+
+| Publisher（發布者） | Subscriber（訂閱者） |
+|---------------------|----------------------|
+| `create_publisher()` | `create_subscription()` |
+| `publisher.publish(msg)` 主動發送 | `callback(msg)` 被動接收 |
+
+#### 執行流程
+
+```
+1. create_subscription() 註冊訂閱
+              ↓
+2. rclpy.spin(node) 開始監聽
+              ↓
+3. 有訊息進入 topic
+              ↓
+4. callback(msg) 自動被呼叫
+              ↓
+5. 處理訊息（轉發、儲存、顯示等）
+```
+
+#### 基本用法
+
+```python
+class MySubscriber(Node):
+    def __init__(self):
+        super().__init__("my_subscriber")
+
+        self.subscription = self.create_subscription(
+            String,                        # 訊息類型
+            "/factory/machine_01/status",  # topic
+            self.on_message,               # 回呼函式
+            10                             # qos
+        )
+
+    def on_message(self, msg):
+        """收到訊息時自動呼叫"""
+        self.get_logger().info(f"收到: {msg.data}")
+```
+
+#### 動態建立多個訂閱
+
+```python
+# 使用 lambda 預設參數捕捉變數
 for ros2_topic, mqtt_topic in TOPIC_MAP.items():
     self.create_subscription(
         String,
@@ -72,6 +133,15 @@ for ros2_topic, mqtt_topic in TOPIC_MAP.items():
 ```
 
 **注意**：在迴圈中使用 lambda 時，必須用預設參數 `t=mqtt_topic` 捕捉當前值，否則所有 callback 都會參照到最後一個值。
+
+#### 回呼函式簽名
+
+```python
+def callback(self, msg):
+    # msg 是收到的訊息物件
+    # 對於 String 類型，用 msg.data 取得字串內容
+    data = msg.data
+```
 
 ## 訊息類型
 
