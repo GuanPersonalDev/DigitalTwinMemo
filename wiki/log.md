@@ -276,3 +276,31 @@ Web Dashboard / Omniverse / 其他系統
 - `entities/MQTT.md` - 擴充 mosquitto.conf 設定說明
   - 各設定項詳細說明表格
   - 正式環境設定參考（TLS、帳密驗證）
+
+## [2026-04-18] add | 新增常見問題與解法
+
+整理開發過程中遇到的問題與解決方案。
+
+### 新增頁面
+
+- `synthesis/常見問題與解法.md`
+
+### 收錄問題類別
+
+**Docker 相關（3 個）**：
+- 找不到設定檔 → cd 到專案目錄
+- Port already allocated → 停止舊容器
+- 容器 Restarting → 檢查設定檔拼寫
+
+**WSL2 網路（2 個）**：
+- ConnectionRefusedError → 改用 Windows IP
+- host.docker.internal 無法解析 → 從 resolv.conf 取得 IP
+
+**Python/paho-mqtt（3 個）**：
+- ModuleNotFoundError → pip install
+- DeprecationWarning → 使用 CallbackAPIVersion.VERSION2
+- import 錯誤 → 正確的 import 語法
+
+**拼寫錯誤（2 個）**：
+- statue vs status
+- persistance vs persistence
