@@ -260,3 +260,19 @@ Web Dashboard / Omniverse / 其他系統
 - 執行流程圖
 - 基本用法與動態建立範例
 - 回呼函式簽名
+
+## [2026-04-18] add | 新增 Docker 實體頁面與 Mosquitto 設定說明
+
+### 新增頁面
+
+- `entities/Docker.md` - Docker 與 Docker Compose 使用說明
+  - docker-compose.yml 結構與設定
+  - volumes 掛載說明
+  - restart 重啟策略
+  - 常用指令參考
+
+### 更新頁面
+
+- `entities/MQTT.md` - 擴充 mosquitto.conf 設定說明
+  - 各設定項詳細說明表格
+  - 正式環境設定參考（TLS、帳密驗證）

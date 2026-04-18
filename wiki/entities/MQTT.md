@@ -93,10 +93,44 @@ services:
 
 ### mosquitto.conf
 
-```
+```conf
 listener 1883
 allow_anonymous true
 persistence true
+persistence_location /mosquitto/data/
+log_dest file /mosquitto/log/mosquitto.log
+```
+
+#### 設定說明
+
+| 設定 | 值 | 說明 |
+|------|-----|------|
+| `listener` | `1883` | 監聽端口，MQTT 標準端口 |
+| `allow_anonymous` | `true` | 允許匿名連線（無需帳密） |
+| `persistence` | `true` | 啟用持久化，重啟後保留訊息 |
+| `persistence_location` | `/mosquitto/data/` | 持久化資料儲存路徑 |
+| `log_dest` | `file ...` | 日誌輸出到檔案 |
+
+#### 正式環境設定（參考）
+
+```conf
+# 基本設定
+listener 1883
+
+# 安全設定（停用匿名，啟用帳密）
+allow_anonymous false
+password_file /mosquitto/config/passwd
+
+# TLS 加密
+listener 8883
+certfile /mosquitto/certs/server.crt
+keyfile /mosquitto/certs/server.key
+
+# 持久化與日誌
+persistence true
+persistence_location /mosquitto/data/
+log_dest file /mosquitto/log/mosquitto.log
+log_type all
 ```
 
 ### 啟動與測試
@@ -132,6 +166,7 @@ MQTT 在數位孿生中的角色：
 ## 相關實體
 
 - [[ROS2]] - 機器人作業系統
+- [[Docker]] - 容器化部署
 - [[concepts/Edge AI|Edge AI]] - 邊緣運算
 
 ## 來源引用
