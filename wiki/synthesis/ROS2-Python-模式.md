@@ -118,6 +118,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 import paho.mqtt.client as mqtt
+import time
 from config import MQTT_BROKER_HOST, MQTT_BROKER_PORT, TOPIC_MAP
 
 class Ros2MqttBridge(Node):
@@ -126,10 +127,10 @@ class Ros2MqttBridge(Node):
 
         # 初始化 MQTT 客戶端
         self.mqttClient_ = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-        self.mqttClient_.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT)
+        self.connectMqtt()  # 使用重連機制
         self.mqttClient_.loop_start()
 
-        # 動態建立多個 subscription（使用 lambda 捕捉變數）
+        # 動態建立多個 subscription
         for ros2_topic, mqtt_topic in TOPIC_MAP.items():
             self.create_subscription(
                 String,
@@ -139,18 +140,114 @@ class Ros2MqttBridge(Node):
             )
         self.get_logger().info("Ros2MqttBridge has already activated")
 
+    def connectMqtt(self):
+        """MQTT 連線（含重試機制）"""
+        retryCount = 0
+        maxRetries = 5
+        while retryCount < maxRetries:
+            try:
+                self.mqttClient_.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT)
+                self.get_logger().info(f"Connected to MQTT Broker...")
+                return
+            except Exception as e:
+                retryCount += 1
+                self.get_logger().warn(f"connect fail ({retryCount}/{maxRetries}): {e}")
+                time.sleep(2)
+        raise RuntimeError("Connect to MQTT Broker fail")
+
     def onRos2Message(self, msg, mqtt_topic):
         self.mqttClient_.publish(mqtt_topic, msg.data)
         self.get_logger().info(f"Published: {mqtt_topic} -> {msg.data}")
 
+    def destroy_node(self):
+        """優雅關閉：清理 MQTT 連線"""
+        self.mqttClient_.loop_stop()
+        self.mqttClient_.disconnect()
+        print("Breakout the connection of MQTT")
+        super().destroy_node()
+
 def main(args=None):
     rclpy.init(args=args)
     node = Ros2MqttBridge()
-    rclpy.spin(node)
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 if __name__ == "__main__":
     main()
+```
+
+## 連線重試模式
+
+外部服務（如 MQTT Broker）可能尚未準備好，使用重試機制提高穩定性：
+
+```python
+import time
+
+def connectMqtt(self):
+    retryCount = 0
+    maxRetries = 5
+    while retryCount < maxRetries:
+        try:
+            self.mqttClient_.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT)
+            self.get_logger().info("Connected!")
+            return
+        except Exception as e:
+            retryCount += 1
+            self.get_logger().warn(f"connect fail ({retryCount}/{maxRetries}): {e}")
+            time.sleep(2)  # 等待 2 秒後重試
+    raise RuntimeError("Connect fail after max retries")
+```
+
+**要點**：
+- 設定最大重試次數（避免無限迴圈）
+- 每次失敗後等待一段時間
+- 超過次數後拋出例外
+
+## 優雅關閉模式（Graceful Shutdown）
+
+確保程式結束時正確釋放資源：
+
+```python
+class MyNode(Node):
+    def destroy_node(self):
+        """覆寫父類別方法，加入清理邏輯"""
+        # 1. 停止背景任務
+        self.mqttClient_.loop_stop()
+        # 2. 斷開連線
+        self.mqttClient_.disconnect()
+        # 3. 呼叫父類別清理
+        super().destroy_node()
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MyNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass  # Ctrl+C 不報錯
+    finally:
+        node.destroy_node()      # 確保清理
+        if rclpy.ok():
+            rclpy.shutdown()
+```
+
+**執行流程**：
+```
+rclpy.spin() 運行中
+       ↓ Ctrl+C
+KeyboardInterrupt 被捕捉
+       ↓
+finally 區塊執行
+       ↓
+destroy_node() 清理資源
+       ↓
+rclpy.shutdown() 關閉 ROS2
 ```
 
 ## 多 Subscriber 模式（Lambda 技巧）

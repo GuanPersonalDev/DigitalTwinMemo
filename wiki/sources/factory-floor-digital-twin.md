@@ -2,7 +2,7 @@
 title: factory-floor-digital-twin 專案
 type: source
 created: 2026-04-17
-updated: 2026-04-17
+updated: 2026-04-18
 original: https://github.com/GuanPersonalDev/factory-floor-digital-twin
 tags: [專案, ROS2, 數位孿生, Python, MQTT, Docker]
 ---
@@ -63,7 +63,7 @@ MachinePublisher (Node)
 | vibration | float | 0.1 ~ 5.0 |
 | status | string | running / warning / error |
 
-### ros2_to_mqtt.py（新增）
+### ros2_to_mqtt.py
 
 **功能**：訂閱 ROS2 topic，轉發到 MQTT broker
 
@@ -72,7 +72,9 @@ MachinePublisher (Node)
 Ros2MqttBridge (Node)
 ├── mqttClient_: mqtt.Client        # MQTT 客戶端
 ├── subscriptions: Dict[str, Sub]   # 多個 ROS2 訂閱
-└── onRos2Message()                 # 收到訊息後發布到 MQTT
+├── connectMqtt()                   # 連線（含重試機制）
+├── onRos2Message()                 # 收到訊息後發布到 MQTT
+└── destroy_node()                  # 優雅關閉
 ```
 
 **Topic 對應**：
@@ -96,6 +98,43 @@ for ros2_topic, mqtt_topic in TOPIC_MAP.items():
 # 收到 ROS2 訊息後轉發到 MQTT
 def onRos2Message(self, msg, mqtt_topic):
     self.mqttClient_.publish(mqtt_topic, msg.data)
+```
+
+**MQTT 連線重試機制**：
+```python
+def connectMqtt(self):
+    retryCount = 0
+    maxRetries = 5
+    while retryCount < maxRetries:
+        try:
+            self.mqttClient_.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT)
+            self.get_logger().info(f"Connected to MQTT Broker...")
+            return
+        except Exception as e:
+            retryCount += 1
+            self.get_logger().warn(f"connect fail ({retryCount}/{maxRetries}): {e}")
+            time.sleep(2)
+    raise RuntimeError("Connect to MQTT Broker fail")
+```
+
+**優雅關閉**：
+```python
+def destroy_node(self):
+    self.mqttClient_.loop_stop()    # 停止背景迴圈
+    self.mqttClient_.disconnect()   # 斷開連線
+    super().destroy_node()          # 呼叫父類別
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = Ros2MqttBridge()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
 ```
 
 ### config.py
@@ -139,6 +178,8 @@ services:
 | `get_logger().info()` | 日誌記錄 |
 | `publisher.publish()` | 發布訊息 |
 | `create_subscription()` | 建立訂閱者 |
+| `destroy_node()` | 節點清理（可覆寫） |
+| `rclpy.ok()` | 檢查 ROS2 是否仍在運行 |
 
 ### paho-mqtt
 
@@ -148,6 +189,8 @@ services:
 | `client.connect(host, port)` | 連接到 Broker |
 | `client.loop_start()` | 啟動背景處理迴圈 |
 | `client.publish(topic, msg)` | 發布訊息 |
+| `client.loop_stop()` | 停止背景處理迴圈 |
+| `client.disconnect()` | 斷開連線 |
 
 ### Python 標準庫
 
@@ -156,6 +199,7 @@ services:
 | `json` | `dumps()` | 字典轉 JSON 字串 |
 | `random` | `uniform()` | 隨機浮點數 |
 | `random` | `choice()` | 隨機選擇 |
+| `time` | `sleep()` | 延遲執行 |
 
 ## Python 語法技巧
 
@@ -166,6 +210,8 @@ services:
 | `.items()` 遍歷 | `for k, v in dict.items()` |
 | `round()` | `round(random.uniform(60, 95), 1)` |
 | lambda 預設參數 | `lambda msg, t=topic: fn(msg, t)` |
+| try/except/finally | 確保資源釋放 |
+| while 重試迴圈 | 連線重試機制 |
 
 ## 執行方式
 
@@ -215,6 +261,8 @@ Web Dashboard  Omniverse / 其他訂閱者
 - [x] ROS2 Publisher 節點
 - [x] ROS2 → MQTT 橋接器
 - [x] Docker 化 MQTT Broker
+- [x] MQTT 連線重試機制
+- [x] 優雅關閉（Graceful Shutdown）
 
 ## 待改進
 

@@ -30,6 +30,7 @@ import rclpy
 | `rclpy.init()` | 初始化 ROS2 通訊環境，必須在建立節點前呼叫 | `rclpy.init(args=args)` |
 | `rclpy.spin(node)` | 讓節點持續運行，處理回呼函式 | `rclpy.spin(node)` |
 | `rclpy.shutdown()` | 關閉 ROS2 通訊環境，釋放資源 | `rclpy.shutdown()` |
+| `rclpy.ok()` | 檢查 ROS2 是否仍在運行 | `if rclpy.ok(): rclpy.shutdown()` |
 
 ### rclpy.node.Node
 
@@ -44,6 +45,7 @@ from rclpy.node import Node
 | `create_subscription(msg_type, topic, callback, qos)` | 建立訂閱者 | `self.create_subscription(String, '/topic', self.callback, 10)` |
 | `create_timer(period, callback)` | 建立定時器，定期執行回呼 | `self.create_timer(1.0, self.publishMachineData)` |
 | `get_logger()` | 取得日誌記錄器 | `self.get_logger().info(f"{machine_id} -> {msg.data}")` |
+| `destroy_node()` | 節點清理，可覆寫加入自訂邏輯 | `super().destroy_node()` |
 
 ### Publisher 物件
 

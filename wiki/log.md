@@ -304,3 +304,38 @@ Web Dashboard / Omniverse / 其他系統
 **拼寫錯誤（2 個）**：
 - statue vs status
 - persistance vs persistence
+
+## [2026-04-18] update | 更新 factory-floor-digital-twin 新進度
+
+專案新增 MQTT 重連機制與優雅關閉功能。
+
+### 新增功能
+
+**1. MQTT 連線重試（connectMqtt）**：
+- 最多重試 5 次
+- 每次失敗等待 2 秒
+- 超過次數拋出 RuntimeError
+
+**2. 優雅關閉（destroy_node）**：
+- 停止 MQTT 背景迴圈
+- 斷開 MQTT 連線
+- 呼叫父類別清理
+
+**3. KeyboardInterrupt 處理**：
+- try/except/finally 確保資源釋放
+- Ctrl+C 不報錯
+
+### 更新頁面
+
+- `sources/factory-floor-digital-twin.md` - 新增程式碼與 API
+- `synthesis/ROS2-Python-模式.md` - 新增連線重試與優雅關閉模式
+- `entities/rclpy.md` - 新增 destroy_node、rclpy.ok()
+
+### 新增 API
+
+| API | 說明 |
+|-----|------|
+| `Node.destroy_node()` | 節點清理（可覆寫） |
+| `rclpy.ok()` | 檢查 ROS2 是否運行中 |
+| `mqtt.loop_stop()` | 停止 MQTT 背景迴圈 |
+| `mqtt.disconnect()` | 斷開 MQTT 連線 |
