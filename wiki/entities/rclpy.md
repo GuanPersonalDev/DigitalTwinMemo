@@ -55,6 +55,24 @@ publisher = self.create_publisher(String, '/topic', 10)
 |------|------|------|
 | `publish(msg)` | 發布訊息到 topic | `publisher.publish(msg)` |
 
+### Subscription 物件
+
+```python
+# 基本用法
+self.create_subscription(String, '/topic', self.callback, 10)
+
+# 動態建立多個 subscription（使用 lambda 捕捉變數）
+for ros2_topic, mqtt_topic in TOPIC_MAP.items():
+    self.create_subscription(
+        String,
+        ros2_topic,
+        lambda msg, t=mqtt_topic: self.onMessage(msg, t),
+        10
+    )
+```
+
+**注意**：在迴圈中使用 lambda 時，必須用預設參數 `t=mqtt_topic` 捕捉當前值，否則所有 callback 都會參照到最後一個值。
+
 ## 訊息類型
 
 ### std_msgs.msg
@@ -98,6 +116,7 @@ publisher.publish(msg)
 
 ### factory-floor-digital-twin
 
+**Publisher 節點**：
 ```python
 # machine_publisher.py
 class MachinePublisher(Node):
@@ -115,6 +134,27 @@ class MachinePublisher(Node):
         self.get_logger().info("MachinePublisher has already activated")
 ```
 
+**Subscriber 節點（Bridge）**：
+```python
+# ros2_to_mqtt.py
+class Ros2MqttBridge(Node):
+    def __init__(self):
+        super().__init__("ros2_mqtt_bridge")
+
+        # 動態建立多個 subscription
+        for ros2_topic, mqtt_topic in TOPIC_MAP.items():
+            self.create_subscription(
+                String,
+                ros2_topic,
+                lambda msg, t=mqtt_topic: self.onRos2Message(msg, t),
+                10
+            )
+
+    def onRos2Message(self, msg, mqtt_topic):
+        # 轉發到 MQTT
+        self.mqttClient_.publish(mqtt_topic, msg.data)
+```
+
 ## 相關實體
 
 - [[ROS2]]
@@ -124,3 +164,4 @@ class MachinePublisher(Node):
 
 - 2026-04-16：MachinePublisher 練習程式碼
 - 2026-04-17：factory-floor-digital-twin 專案分析
+- 2026-04-18：Ros2MqttBridge Subscriber 模式

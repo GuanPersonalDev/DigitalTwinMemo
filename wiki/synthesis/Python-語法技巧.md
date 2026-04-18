@@ -188,6 +188,55 @@ class FactoryPublisher(Node):
         pass
 ```
 
+## Lambda 與閉包
+
+### 迴圈中的 Lambda 陷阱
+
+在迴圈中使用 lambda 時，變數會被延遲綁定（late binding），導致所有 lambda 都參照最後一個值。
+
+```python
+# ❌ 錯誤：所有 callback 的 topic 都是最後一個
+for topic in topics:
+    callbacks.append(lambda msg: process(msg, topic))
+
+# ✓ 正確：使用預設參數捕捉當前值
+for topic in topics:
+    callbacks.append(lambda msg, t=topic: process(msg, t))
+```
+
+### 實際應用（ROS2 多訂閱）
+
+```python
+# 動態建立多個 subscription
+for ros2_topic, mqtt_topic in TOPIC_MAP.items():
+    self.create_subscription(
+        String,
+        ros2_topic,
+        lambda msg, t=mqtt_topic: self.onMessage(msg, t),  # t 捕捉當前值
+        10
+    )
+```
+
+**原理**：預設參數在函式定義時求值，而非呼叫時求值。
+
+## 組態模組模式
+
+將設定集中到單獨的 config.py：
+
+```python
+# config.py
+MQTT_BROKER_HOST = "10.255.255.254"
+MQTT_BROKER_PORT = 1883
+
+TOPIC_MAP = {
+    "/factory/machine_01/status": "factory/machine_01/status",
+    "/factory/machine_02/status": "factory/machine_02/status",
+}
+
+# main.py
+from config import MQTT_BROKER_HOST, MQTT_BROKER_PORT, TOPIC_MAP
+```
+
 ## 常數定義
 
 ```python
@@ -199,5 +248,6 @@ DEFAULT_QOS = 10
 
 ## 相關頁面
 
-- [[rclpy]] - ROS2 Python 函式庫
+- [[entities/rclpy|rclpy]] - ROS2 Python 函式庫
 - [[synthesis/ROS2-Python-模式|ROS2 Python 模式]] - ROS2 程式碼模式
+- [[entities/MQTT|MQTT]] - MQTT 協定與 paho-mqtt

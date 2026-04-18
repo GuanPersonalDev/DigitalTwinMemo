@@ -109,6 +109,72 @@ for i in range(3):
     self._publisher_dic[topic] = self.create_publisher(Float32, topic, 10)
 ```
 
+## ROS2 → MQTT 橋接模式（完整範例）
+
+來自 `factory-floor-digital-twin/bridge/ros2_to_mqtt.py`：
+
+```python
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String
+import paho.mqtt.client as mqtt
+from config import MQTT_BROKER_HOST, MQTT_BROKER_PORT, TOPIC_MAP
+
+class Ros2MqttBridge(Node):
+    def __init__(self):
+        super().__init__("ros2_mqtt_bridge")
+
+        # 初始化 MQTT 客戶端
+        self.mqttClient_ = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        self.mqttClient_.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT)
+        self.mqttClient_.loop_start()
+
+        # 動態建立多個 subscription（使用 lambda 捕捉變數）
+        for ros2_topic, mqtt_topic in TOPIC_MAP.items():
+            self.create_subscription(
+                String,
+                ros2_topic,
+                lambda msg, t=mqtt_topic: self.onRos2Message(msg, t),
+                10
+            )
+        self.get_logger().info("Ros2MqttBridge has already activated")
+
+    def onRos2Message(self, msg, mqtt_topic):
+        self.mqttClient_.publish(mqtt_topic, msg.data)
+        self.get_logger().info(f"Published: {mqtt_topic} -> {msg.data}")
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = Ros2MqttBridge()
+    rclpy.spin(node)
+    rclpy.shutdown()
+
+if __name__ == "__main__":
+    main()
+```
+
+## 多 Subscriber 模式（Lambda 技巧）
+
+在迴圈中建立多個 subscription 時，需要用 lambda 預設參數捕捉變數：
+
+```python
+# 錯誤寫法（所有 callback 都會參照最後一個 topic）
+for ros2_topic, mqtt_topic in TOPIC_MAP.items():
+    self.create_subscription(
+        String, ros2_topic,
+        lambda msg: self.onMessage(msg, mqtt_topic),  # ❌ mqtt_topic 會是最後一個值
+        10
+    )
+
+# 正確寫法（使用預設參數捕捉當前值）
+for ros2_topic, mqtt_topic in TOPIC_MAP.items():
+    self.create_subscription(
+        String, ros2_topic,
+        lambda msg, t=mqtt_topic: self.onMessage(msg, t),  # ✓ t 捕捉當前 mqtt_topic
+        10
+    )
+```
+
 ## Topic 命名規範
 
 工廠場景常用的 topic 命名：
@@ -214,6 +280,9 @@ from std_msgs.msg import String, Float32, Int32, Bool
 import json
 import random
 from datetime import datetime
+
+# MQTT（橋接用）
+import paho.mqtt.client as mqtt
 ```
 
 ## 執行節點
@@ -228,10 +297,12 @@ ros2 run factory_publisher machine_publisher
 
 ## 相關頁面
 
-- [[rclpy]] - 函式庫詳細說明
-- [[ROS2]] - 指令參考
+- [[entities/rclpy|rclpy]] - 函式庫詳細說明
+- [[entities/ROS2|ROS2]] - 指令參考
+- [[entities/MQTT|MQTT]] - MQTT 協定
 
 ## 來源引用
 
 - 2026-04-16：MachinePublisher 練習程式碼
 - 2026-04-17：factory-floor-digital-twin 專案分析
+- 2026-04-18：Ros2MqttBridge 橋接模式

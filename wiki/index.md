@@ -44,6 +44,7 @@ updated: 2026-04-16
 | [[entities/NVIDIA Isaac\|NVIDIA Isaac]] | 平台 | 機器人開發與模擬平台 |
 | [[entities/ROS2\|ROS2]] | 框架 | 機器人作業系統，數位孿生通訊 |
 | [[entities/rclpy\|rclpy]] | 函式庫 | ROS2 Python 客戶端函式庫 |
+| [[entities/MQTT\|MQTT]] | 協定 | 輕量級 IoT 訊息協定 |
 
 ## 綜合分析 (Synthesis)
 
@@ -78,6 +79,6 @@ updated: 2026-04-16
 
 - 來源數量：7
 - 概念頁面：4
-- 實體頁面：4
+- 實體頁面：5
 - 綜合分析：2
 - 最後更新：2026-04-17

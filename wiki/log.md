@@ -204,3 +204,50 @@ ROS2 工廠機台模擬專案，使用 Python 和 rclpy 實作：
 - 七步驟流程：安裝 → 環境 → 參數 → 馬達 → 感測器 → Package → 控制碼
 - Action Graphs：視覺化腳本介面
 - Sim2Real：先模擬後部署的策略
+
+## [2026-04-18] update | 更新 factory-floor-digital-twin 專案進度
+
+專案新增 ROS2 → MQTT 橋接功能。
+
+### 新增檔案
+
+```
+bridge/
+├── ros2_to_mqtt.py    # ROS2 訂閱者 → MQTT 發布
+└── config.py          # 組態設定（broker、topic 對應）
+
+mosquitto/
+└── config/mosquitto.conf
+
+docker-compose.yml     # Mosquitto MQTT Broker
+```
+
+### 架構更新
+
+```
+machine_publisher.py (ROS2 Publisher)
+       ↓ ROS2 Topic
+ros2_to_mqtt.py (Bridge)
+       ↓ MQTT
+Web Dashboard / Omniverse / 其他系統
+```
+
+### 建立/更新頁面
+
+**新增實體**：
+- `entities/MQTT.md` - MQTT 協定與 paho-mqtt 使用
+
+**更新頁面**：
+- `sources/factory-floor-digital-twin.md` - 新增 Bridge 架構與程式碼
+- `entities/rclpy.md` - 新增 Subscription 使用與 lambda 技巧
+- `synthesis/ROS2-Python-模式.md` - 新增橋接模式完整範例
+- `synthesis/Python-語法技巧.md` - 新增 lambda 閉包陷阱與組態模組模式
+
+### 新增 API/語法
+
+**paho-mqtt**：
+- `mqtt.Client()`, `connect()`, `loop_start()`, `publish()`
+
+**Python 技巧**：
+- Lambda 預設參數捕捉迴圈變數：`lambda msg, t=topic: fn(msg, t)`
+- 組態模組模式：`from config import SETTINGS`
