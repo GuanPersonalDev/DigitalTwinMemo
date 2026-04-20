@@ -2,7 +2,7 @@
 title: MQTT
 type: entity
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-04-19
 sources: [factory-floor-digital-twin]
 tags: [協定, IoT, 訊息佇列]
 ---
@@ -74,6 +74,66 @@ client.on_message = on_message
 client.connect("localhost", 1883)
 client.subscribe("factory/#")
 client.loop_forever()
+```
+
+### 回呼函式（Callbacks）
+
+#### on_connect
+
+連線結果回呼，用於確認連線狀態：
+
+```python
+def on_connect(client, userdata, flags, reason_code, properties):
+    """
+    client:      mqtt.Client 實例
+    userdata:    使用者自訂資料
+    flags:       連線旗標（dict）
+    reason_code: 連線結果代碼（0=成功）
+    properties:  MQTT 5.0 屬性
+    """
+    if reason_code == 0:
+        print("連線成功")
+        client.subscribe("factory/#")
+    else:
+        print(f"連線失敗: {reason_code}")
+
+client.on_connect = on_connect
+```
+
+#### reason_code 常見值（MQTT 5.0）
+
+| 代碼 | 名稱 | 說明 |
+|------|------|------|
+| **0** | Success | 連線成功 |
+| 128 | Unspecified error | 未指定錯誤 |
+| 129 | Malformed packet | 封包格式錯誤 |
+| 130 | Protocol error | 協定錯誤 |
+| 132 | Unsupported protocol version | 不支援的協定版本 |
+| 133 | Client identifier not valid | 無效的 Client ID |
+| 134 | Bad user name or password | 帳號或密碼錯誤 |
+| 135 | Not authorized | 未授權 |
+| 136 | Server unavailable | 伺服器不可用 |
+| 137 | Server busy | 伺服器忙碌 |
+| 138 | Banned | 被封禁 |
+| 159 | Connection rate exceeded | 連線頻率過高 |
+
+#### on_message
+
+收到訊息回呼：
+
+```python
+def on_message(client, userdata, msg):
+    """
+    client:   mqtt.Client 實例
+    userdata: 使用者自訂資料
+    msg:      訊息物件
+        - msg.topic:   topic 名稱（str）
+        - msg.payload: 訊息內容（bytes）
+    """
+    data = json.loads(msg.payload.decode())
+    print(f"{msg.topic}: {data}")
+
+client.on_message = on_message
 ```
 
 ## Docker 部署（Mosquitto）

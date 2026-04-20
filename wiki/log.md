@@ -460,3 +460,17 @@ ROS2 Publisher → MQTT Bridge → Mosquitto → Omniverse Extension
                                               ↓
                                          3D 視覺化（待實作）
 ```
+
+## [2026-04-19] update | 新增 paho-mqtt 回呼函式說明
+
+在 `entities/MQTT.md` 中新增：
+
+- `on_connect` 回呼函式簽名與用法
+- `reason_code` 常見值對照表（MQTT 5.0）
+- `on_message` 回呼函式簽名與用法
+
+常用 reason_code：
+- 0：Success（連線成功）
+- 134：Bad user name or password
+- 135：Not authorized
+- 136：Server unavailable
