@@ -4,7 +4,7 @@ type: source
 created: 2026-04-17
 updated: 2026-04-18
 original: https://github.com/GuanPersonalDev/factory-floor-digital-twin
-tags: [專案, ROS2, 數位孿生, Python, MQTT, Docker]
+tags: [專案, ROS2, 數位孿生, Python, MQTT, Docker, Omniverse]
 ---
 
 # factory-floor-digital-twin 專案
@@ -22,15 +22,21 @@ tags: [專案, ROS2, 數位孿生, Python, MQTT, Docker]
 ```
 factory-floor-digital-twin/
 ├── python/
-│   └── factory_publisher.py        # 早期版本（未完成）
+│   └── factory_publisher.py              # 早期版本（未完成）
 ├── ros2_publisher/
-│   └── machine_publisher.py        # ROS2 Publisher 節點
+│   └── machine_publisher.py              # ROS2 Publisher 節點
 ├── bridge/
-│   ├── ros2_to_mqtt.py             # ROS2 → MQTT 橋接器
-│   └── config.py                   # 組態設定
+│   ├── ros2_to_mqtt.py                   # ROS2 → MQTT 橋接器
+│   └── config.py                         # 組態設定
+├── omniverse_extension/                  # Omniverse Extension（新增）
+│   ├── config/
+│   │   └── extension.toml                # Extension 設定檔
+│   └── omniverse_factory_twin/
+│       ├── __init__.py                   # 模組初始化
+│       └── extension.py                  # Extension 主程式
 ├── mosquitto/
-│   └── config/mosquitto.conf       # MQTT Broker 設定
-├── docker-compose.yml              # Docker 服務定義
+│   └── config/mosquitto.conf             # MQTT Broker 設定
+├── docker-compose.yml                    # Docker 服務定義
 └── README.md
 ```
 
@@ -95,9 +101,15 @@ for ros2_topic, mqtt_topic in TOPIC_MAP.items():
         10
     )
 
-# 收到 ROS2 訊息後轉發到 MQTT
+# 收到 ROS2 訊息後轉發到 MQTT（含錯誤處理）
 def onRos2Message(self, msg, mqtt_topic):
-    self.mqttClient_.publish(mqtt_topic, msg.data)
+    try:
+        data = json.loads(msg.data)
+        self.mqttClient_.publish(mqtt_topic, msg.data)
+    except json.JSONDecodeError as e:
+        self.get_logger().warn(f"JSON parse error: {e}")
+    except Exception as e:
+        self.get_logger().warn(f"Publish error: {e}")
 ```
 
 **MQTT 連線重試機制**：
@@ -150,6 +162,89 @@ TOPIC_MAP = {
 }
 ```
 
+### Omniverse Extension（新增）
+
+**功能**：在 Omniverse 中訂閱 MQTT 訊息，接收工廠機台資料
+
+**架構**：
+```
+FactoryTwinExtension (omni.ext.IExt)
+├── mqttClient_: mqtt.Client        # MQTT 客戶端
+├── on_startup()                    # Extension 啟動
+├── on_shutdown()                   # Extension 關閉
+├── connectMqtt()                   # 連接 MQTT
+├── onMqttConnect()                 # 連線成功回呼
+└── onMqttMessage()                 # 收到訊息回呼
+```
+
+**extension.toml（Extension 設定）**：
+```toml
+[package]
+title = "Factory Floor Digital Twin"
+description = "Real-time factory floor monitoring via MQTT"
+version = "0.1.0"
+
+[[python.module]]
+name = "omniverse_factory_twin"
+
+[dependencies]
+"omni.kit.uiapp" = {}
+```
+
+**extension.py 核心程式碼**：
+```python
+import omni.ext
+import paho.mqtt.client as mqtt
+import json
+
+MQTT_BROKER_HOST = "localhost"
+MQTT_BROKER_PORT = 1883
+MACHINE_TOPICS = [
+    "factory/machine_01/status",
+    "factory/machine_02/status",
+    "factory/machine_03/status",
+]
+
+class FactoryTwinExtension(omni.ext.IExt):
+
+    def on_startup(self, ext_id):
+        print("[Factory Twin] Extension activate")
+        self.mqttClient_ = None
+        self.connectMqtt()
+
+    def on_shutdown(self):
+        print("[Factory Twin] Extension end")
+        if self.mqttClient_:
+            self.mqttClient_.loop_stop()
+            self.mqttClient_.disconnect()
+
+    def connectMqtt(self):
+        try:
+            self.mqttClient_ = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+            self.mqttClient_.on_connect = self.onMqttConnect
+            self.mqttClient_.on_message = self.onMqttMessage
+            self.mqttClient_.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT)
+            self.mqttClient_.loop_start()
+        except Exception as e:
+            print(f"[Factory Twin] MQTT connect error: {e}")
+
+    def onMqttConnect(self, client, userdata, flags, reason_code, properties):
+        if reason_code == 0:
+            print("[Factory Twin] Connect to MQTT success")
+            for topic in MACHINE_TOPICS:
+                client.subscribe(topic)
+        else:
+            print(f"[Factory Twin] Connect fail: {reason_code}")
+
+    def onMqttMessage(self, client, userdata, msg):
+        try:
+            data = json.loads(msg.payload.decode())
+            print(f"[Factory Twin] {msg.topic} -> {data}")
+            # TODO: 更新 3D 場景中的機台狀態
+        except Exception as e:
+            print(f"[Factory Twin] Message error: {e}")
+```
+
 ### Docker 基礎設施
 
 使用 Eclipse Mosquitto 作為 MQTT Broker：
@@ -191,6 +286,17 @@ services:
 | `client.publish(topic, msg)` | 發布訊息 |
 | `client.loop_stop()` | 停止背景處理迴圈 |
 | `client.disconnect()` | 斷開連線 |
+| `client.on_connect` | 連線成功回呼（callback） |
+| `client.on_message` | 收到訊息回呼（callback） |
+| `client.subscribe(topic)` | 訂閱 topic |
+
+### Omniverse Kit（新增）
+
+| API | 用途 |
+|-----|------|
+| `omni.ext.IExt` | Extension 基底類別 |
+| `on_startup(ext_id)` | Extension 啟動時呼叫 |
+| `on_shutdown()` | Extension 關閉時呼叫 |
 
 ### Python 標準庫
 
@@ -246,14 +352,16 @@ mosquitto_sub -h localhost -t "factory/#"
 machine_publisher.py (ROS2 Publisher)
        ↓ ROS2 Topic
 ros2_to_mqtt.py (Bridge)
-       ↓ MQTT
-┌──────┴──────┐
-│             │
-Web Dashboard  Omniverse / 其他訂閱者
-│             │
-└──────┬──────┘
+       ↓ MQTT (Mosquitto Broker)
        ↓
-  數位孿生視覺化
+┌──────┴──────────────────────┐
+│                             │
+│  FactoryTwinExtension       │ ← Omniverse Extension（新增）
+│  (omniverse_factory_twin)   │
+│                             │
+└──────┬──────────────────────┘
+       ↓
+  Omniverse 3D 視覺化
 ```
 
 ## 已完成
@@ -263,15 +371,19 @@ Web Dashboard  Omniverse / 其他訂閱者
 - [x] Docker 化 MQTT Broker
 - [x] MQTT 連線重試機制
 - [x] 優雅關閉（Graceful Shutdown）
+- [x] Bridge 錯誤處理（JSON 解析、發布異常）
+- [x] Omniverse Extension 基礎架構
+- [x] Extension MQTT 訂閱機制
 
 ## 待改進
 
 1. 增加更多感測器類型（電流、壓力等）
 2. 加入異常狀態的模擬邏輯
-3. 與 Omniverse 整合測試
+3. ~~與 Omniverse 整合測試~~ ✓ Extension 已建立
 4. ~~加入 Subscriber 節點接收控制指令~~ ✓ 已實作 Bridge
 5. MQTT → ROS2 反向橋接（控制指令）
-6. Web Dashboard 視覺化
+6. Extension 連接 3D 場景物件
+7. 根據感測器資料更新機台視覺狀態
 
 ## 相關頁面
 
@@ -280,3 +392,4 @@ Web Dashboard  Omniverse / 其他訂閱者
 - [[synthesis/ROS2-Python-模式|ROS2 Python 模式]] - 程式碼模式
 - [[concepts/數位孿生|數位孿生]] - 概念說明
 - [[entities/MQTT|MQTT]] - 訊息協定
+- [[entities/NVIDIA Omniverse|NVIDIA Omniverse]] - Omniverse 平台

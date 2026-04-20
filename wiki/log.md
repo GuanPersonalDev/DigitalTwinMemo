@@ -409,3 +409,54 @@ Web Dashboard / Omniverse / 其他系統
 OPC UA + MQTT 混合架構：
 - OPC UA：工廠內部 M2M
 - MQTT：邊緣到雲端
+
+## [2026-04-19] update | 更新專案進度：Omniverse Extension
+
+專案新增 Omniverse Extension，實現 MQTT 資料接收。
+
+### 新增檔案
+
+```
+omniverse_extension/
+├── config/extension.toml           # Extension 設定
+└── omniverse_factory_twin/
+    ├── __init__.py                 # 模組初始化
+    └── extension.py                # Extension 主程式
+```
+
+### 新增功能
+
+**FactoryTwinExtension**：
+- 繼承 `omni.ext.IExt`
+- `on_startup()` / `on_shutdown()` 生命週期
+- MQTT 連線與訂閱機制
+- `on_connect` / `on_message` 回呼處理
+
+**Bridge 錯誤處理**：
+- JSON 解析錯誤處理
+- 發布異常處理
+
+### 建立/更新頁面
+
+**新增綜合分析**：
+- `synthesis/Omniverse-Extension-開發.md`
+  - Extension 檔案結構
+  - extension.toml 設定說明
+  - 生命週期方法
+  - paho-mqtt 回呼簽名
+  - 完整程式碼範例
+
+**更新來源**：
+- `sources/factory-floor-digital-twin.md`
+  - 新增檔案結構
+  - 新增 Omniverse Extension 程式碼說明
+  - 更新架構圖
+  - 新增 Omniverse API
+
+### 架構更新
+
+```
+ROS2 Publisher → MQTT Bridge → Mosquitto → Omniverse Extension
+                                              ↓
+                                         3D 視覺化（待實作）
+```

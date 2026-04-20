@@ -29,14 +29,14 @@ updated: 2026-04-16
 
 ## 概念 (Concepts)
 
-| 概念 | 說明 | 相關來源數 |
-|------|------|------------|
-| [[concepts/數位孿生\|數位孿生]] | 實體物件或系統的虛擬複製品 | 5 |
-| [[concepts/USD\|USD]] | Universal Scene Description，3D 場景描述格式 | 2 |
-| [[concepts/Edge AI\|Edge AI]] | 邊緣人工智慧，在資料源頭執行 AI 推論 | 1 |
-| [[concepts/Federated Learning\|Federated Learning]] | 聯邦學習，分散式模型訓練 | 1 |
-| [[concepts/工業4.0\|工業4.0]] | 第四次工業革命，智慧製造時代 | - |
-| [[concepts/智慧製造\|智慧製造]] | Smart Manufacturing 核心實踐 | - |
+| 概念                                                  | 說明                                    | 相關來源數 |
+| --------------------------------------------------- | ------------------------------------- | ----- |
+| [[concepts/數位孿生\|數位孿生]]                             | 實體物件或系統的虛擬複製品                         | 5     |
+| [[concepts/USD\|USD]]                               | Universal Scene Description，3D 場景描述格式 | 2     |
+| [[concepts/Edge AI\|Edge AI]]                       | 邊緣人工智慧，在資料源頭執行 AI 推論                  | 1     |
+| [[concepts/Federated Learning\|Federated Learning]] | 聯邦學習，分散式模型訓練                          | 1     |
+| [[concepts/工業4.0\|工業4.0]]                           | 第四次工業革命，智慧製造時代                        | -     |
+| [[concepts/智慧製造\|智慧製造]]                             | Smart Manufacturing 核心實踐              | -     |
 
 ## 實體 (Entities)
 
@@ -58,6 +58,7 @@ updated: 2026-04-16
 | [[synthesis/常見問題與解法\|常見問題與解法]] | Docker、WSL2、MQTT 除錯 | 2026-04-18 |
 | [[synthesis/工廠感測器與監測指標\|工廠感測器與監測指標]] | 感測器類型、KPI、告警設計 | 2026-04-18 |
 | [[synthesis/工業通訊協定與標準\|工業通訊協定與標準]] | MQTT、OPC UA、IEC 62443 | 2026-04-18 |
+| [[synthesis/Omniverse-Extension-開發\|Omniverse Extension 開發]] | Extension 架構與 MQTT 整合 | 2026-04-19 |
 
 ---
 
@@ -86,5 +87,5 @@ updated: 2026-04-16
 - 來源數量：7
 - 概念頁面：6
 - 實體頁面：6
-- 綜合分析：5
-- 最後更新：2026-04-17
+- 綜合分析：6
+- 最後更新：2026-04-19
