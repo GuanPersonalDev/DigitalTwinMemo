@@ -35,6 +35,8 @@ updated: 2026-04-16
 | [[concepts/USD\|USD]] | Universal Scene Description，3D 場景描述格式 | 2 |
 | [[concepts/Edge AI\|Edge AI]] | 邊緣人工智慧，在資料源頭執行 AI 推論 | 1 |
 | [[concepts/Federated Learning\|Federated Learning]] | 聯邦學習，分散式模型訓練 | 1 |
+| [[concepts/工業4.0\|工業4.0]] | 第四次工業革命，智慧製造時代 | - |
+| [[concepts/智慧製造\|智慧製造]] | Smart Manufacturing 核心實踐 | - |
 
 ## 實體 (Entities)
 
@@ -54,6 +56,7 @@ updated: 2026-04-16
 | [[synthesis/ROS2-Python-模式\|ROS2 Python 模式]] | 程式碼模式與範例 | 2026-04-16 |
 | [[synthesis/Python-語法技巧\|Python 語法技巧]] | ROS2 開發常用語法 | 2026-04-17 |
 | [[synthesis/常見問題與解法\|常見問題與解法]] | Docker、WSL2、MQTT 除錯 | 2026-04-18 |
+| [[synthesis/工廠感測器與監測指標\|工廠感測器與監測指標]] | 感測器類型、KPI、告警設計 | 2026-04-18 |
 
 ---
 
@@ -80,7 +83,7 @@ updated: 2026-04-16
 ## 統計
 
 - 來源數量：7
-- 概念頁面：4
+- 概念頁面：6
 - 實體頁面：6
-- 綜合分析：3
+- 綜合分析：4
 - 最後更新：2026-04-17
