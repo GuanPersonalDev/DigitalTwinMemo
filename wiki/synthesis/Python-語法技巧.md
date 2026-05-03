@@ -2,9 +2,9 @@
 title: Python 語法技巧
 type: synthesis
 created: 2026-04-17
-updated: 2026-04-17
+updated: 2026-04-22
 sources: [factory-floor-digital-twin]
-tags: [程式碼, Python, 語法]
+tags: [程式碼, Python, 語法, 類型提示, 執行緒]
 ---
 
 # Python 語法技巧
@@ -246,8 +246,208 @@ PUBLISH_INTERVAL = 1.0  # seconds
 DEFAULT_QOS = 10
 ```
 
+## 類型提示（Type Hints）
+
+### 基本語法（Python 3.9+）
+
+```python
+# 參數與回傳值類型
+def greet(name: str) -> str:
+    return f"Hello, {name}"
+
+# 泛型容器（Python 3.9+ 內建支援）
+topics: list[str] = ["topic1", "topic2"]
+mapping: dict[str, int] = {"a": 1, "b": 2}
+
+# Python 3.8 以下需要從 typing 匯入
+from typing import List, Dict
+topics: List[str] = ["topic1", "topic2"]
+```
+
+### typing 模組
+
+```python
+from typing import Callable, Optional
+
+# Optional：可為 None
+callback: Optional[Callable] = None  # 等同 Callable | None
+
+# Callable：可呼叫物件
+def set_callback(fn: Callable[[str, dict], None]):
+    """fn 接受 (str, dict) 參數，回傳 None"""
+    self.callback = fn
+
+# 實際使用
+self.messageCallback_: Optional[Callable] = None
+
+def setMessageCallback(self, callback: Callable):
+    self.messageCallback_ = callback
+```
+
+### 類別變數類型提示
+
+```python
+class BaseMqttExtension:
+    MQTT_HOST: str = "localhost"
+    MQTT_PORT: int = 1883
+    MQTT_TOPICS: list[str] = []  # 泛型語法
+```
+
+## 執行緒安全
+
+### threading.Lock
+
+```python
+import threading
+
+class ThreadSafeClass:
+    def __init__(self):
+        self.data_ = {}
+        self.lock_ = threading.Lock()
+
+    def write(self, key, value):
+        with self.lock_:  # 進入時取得鎖，離開時釋放
+            self.data_[key] = value
+
+    def read_and_clear(self):
+        with self.lock_:
+            result = dict(self.data_)  # 淺複製
+            self.data_.clear()
+        return result
+```
+
+### 字典複製
+
+```python
+# 淺複製（只複製第一層）
+original = {"a": 1, "b": [1, 2]}
+copy1 = dict(original)      # 方法一
+copy2 = original.copy()     # 方法二
+copy3 = {**original}        # 方法三（解包）
+
+# 深複製（完整複製巢狀結構）
+import copy
+deep = copy.deepcopy(original)
+```
+
+## 抽象方法模式
+
+### NotImplementedError
+
+```python
+class BaseClass:
+    def process(self, data):
+        """子類別必須實作"""
+        raise NotImplementedError
+
+class ConcreteClass(BaseClass):
+    def process(self, data):
+        # 實際實作
+        return data * 2
+```
+
+### Hook 方法模式
+
+```python
+class BaseExtension:
+    def on_startup(self):
+        self.setup()
+        self.onStartupHook()  # Hook 給子類別
+
+    def onStartupHook(self):
+        pass  # 預設空實作
+
+class MyExtension(BaseExtension):
+    def onStartupHook(self):
+        print("子類別初始化")
+```
+
+## 安全屬性檢查
+
+### hasattr()
+
+```python
+# 檢查屬性是否存在
+if hasattr(self, 'client_') and self.client_:
+    self.client_.disconnect()
+
+# 等同於
+try:
+    if self.client_:
+        self.client_.disconnect()
+except AttributeError:
+    pass
+```
+
+### getattr() 與預設值
+
+```python
+# 取得屬性，不存在時回傳預設值
+value = getattr(obj, 'attr', default_value)
+```
+
+## 取得類別資訊
+
+```python
+class MyClass:
+    def log(self, msg):
+        # 取得類別名稱
+        name = self.__class__.__name__  # "MyClass"
+        print(f"[{name}] {msg}")
+
+# 繼承時自動反映子類別名稱
+class ChildClass(MyClass):
+    pass
+
+child = ChildClass()
+child.log("hello")  # [ChildClass] hello
+```
+
+## 字典安全操作
+
+### .get() 方法
+
+```python
+# 安全取值（key 不存在時回傳預設值）
+status = data.get("status", "unknown")
+
+# 巢狀字典安全取值
+value = data.get("level1", {}).get("level2", default)
+
+# 對比直接存取（會拋出 KeyError）
+status = data["status"]  # 若不存在會報錯
+```
+
+### in 檢查
+
+```python
+if "key" in my_dict:
+    value = my_dict["key"]
+```
+
+## Lambda 進階用法
+
+### 捕捉外部變數
+
+```python
+# 在 lambda 中使用外部變數
+topics = ["a", "b", "c"]
+
+# lambda 結合預設參數捕捉
+self.client_.on_connect = lambda c, u, f, rc, p: self.onConnect(c, topics, rc)
+
+# 等同於
+def make_handler(captured_topics):
+    def handler(c, u, f, rc, p):
+        return self.onConnect(c, captured_topics, rc)
+    return handler
+
+self.client_.on_connect = make_handler(topics)
+```
+
 ## 相關頁面
 
 - [[entities/rclpy|rclpy]] - ROS2 Python 函式庫
 - [[synthesis/ROS2-Python-模式|ROS2 Python 模式]] - ROS2 程式碼模式
 - [[entities/MQTT|MQTT]] - MQTT 協定與 paho-mqtt
+- [[synthesis/Omniverse-Extension-開發|Omniverse Extension 開發]] - 執行緒安全模式

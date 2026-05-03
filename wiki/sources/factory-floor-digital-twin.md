@@ -2,9 +2,9 @@
 title: factory-floor-digital-twin 專案
 type: source
 created: 2026-04-17
-updated: 2026-04-18
+updated: 2026-04-22
 original: https://github.com/GuanPersonalDev/factory-floor-digital-twin
-tags: [專案, ROS2, 數位孿生, Python, MQTT, Docker, Omniverse]
+tags: [專案, ROS2, 數位孿生, Python, MQTT, Docker, Omniverse, USD]
 ---
 
 # factory-floor-digital-twin 專案
@@ -28,12 +28,14 @@ factory-floor-digital-twin/
 ├── bridge/
 │   ├── ros2_to_mqtt.py                   # ROS2 → MQTT 橋接器
 │   └── config.py                         # 組態設定
-├── omniverse_extension/                  # Omniverse Extension（新增）
+├── omniverse_extension/                  # Omniverse Extension
 │   ├── config/
 │   │   └── extension.toml                # Extension 設定檔
 │   └── omniverse_factory_twin/
 │       ├── __init__.py                   # 模組初始化
-│       └── extension.py                  # Extension 主程式
+│       ├── mqtt_client.py                # MQTT 客戶端封裝（新增）
+│       ├── base_extension.py             # 抽象基底類別（新增）
+│       └── extension.py                  # Extension 主程式（重構）
 ├── mosquitto/
 │   └── config/mosquitto.conf             # MQTT Broker 設定
 ├── docker-compose.yml                    # Docker 服務定義
@@ -162,87 +164,187 @@ TOPIC_MAP = {
 }
 ```
 
-### Omniverse Extension（新增）
+### Omniverse Extension（重構）
 
-**功能**：在 Omniverse 中訂閱 MQTT 訊息，接收工廠機台資料
+**功能**：在 Omniverse 中訂閱 MQTT 訊息，接收工廠機台資料並更新 3D 場景
 
-**架構**：
+**架構（重構後）**：
 ```
-FactoryTwinExtension (omni.ext.IExt)
-├── mqttClient_: mqtt.Client        # MQTT 客戶端
-├── on_startup()                    # Extension 啟動
-├── on_shutdown()                   # Extension 關閉
-├── connectMqtt()                   # 連接 MQTT
-├── onMqttConnect()                 # 連線成功回呼
-└── onMqttMessage()                 # 收到訊息回呼
-```
-
-**extension.toml（Extension 設定）**：
-```toml
-[package]
-title = "Factory Floor Digital Twin"
-description = "Real-time factory floor monitoring via MQTT"
-version = "0.1.0"
-
-[[python.module]]
-name = "omniverse_factory_twin"
-
-[dependencies]
-"omni.kit.uiapp" = {}
+MqttClient（MQTT 通訊封裝）
+├── connect() / disconnect()
+├── onConnect() / onMessage()
+└── setMessageCallback()
+       ↑ 使用
+BaseMqttExtension（抽象基底類別）
+├── on_startup() / on_shutdown()
+├── onExtensionStartup()        # Hook 給子類別
+├── onExtensionShutdown()       # Hook 給子類別
+└── onMqttMessage()             # 抽象方法
+       ↑ 繼承
+FactoryTwinExtension（實作類別）
+├── onExtensionStartup()        # 初始化執行緒鎖
+├── onMqttMessage()             # 處理訊息、排隊更新
+├── onUpdate()                  # 主執行緒更新場景
+├── statusToColor()             # 狀態→顏色對應
+└── updateMachineColor()        # USD API 更新顏色
 ```
 
-**extension.py 核心程式碼**：
+#### mqtt_client.py（MQTT 客戶端封裝）
+
 ```python
-import omni.ext
 import paho.mqtt.client as mqtt
 import json
+from typing import Callable, Optional
 
-MQTT_BROKER_HOST = "localhost"
-MQTT_BROKER_PORT = 1883
-MACHINE_TOPICS = [
-    "factory/machine_01/status",
-    "factory/machine_02/status",
-    "factory/machine_03/status",
-]
+class MqttClient:
+    def __init__(self, host: str, port: int):
+        self.host_ = host
+        self.port_ = port
+        self.client_ = None
+        self.messageCallback_: Optional[Callable] = None
 
-class FactoryTwinExtension(omni.ext.IExt):
+    def setMessageCallback(self, callback: Callable):
+        self.messageCallback_ = callback
 
-    def on_startup(self, ext_id):
-        print("[Factory Twin] Extension activate")
-        self.mqttClient_ = None
-        self.connectMqtt()
-
-    def on_shutdown(self):
-        print("[Factory Twin] Extension end")
-        if self.mqttClient_:
-            self.mqttClient_.loop_stop()
-            self.mqttClient_.disconnect()
-
-    def connectMqtt(self):
+    def connect(self, topics: list[str]):
         try:
-            self.mqttClient_ = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
-            self.mqttClient_.on_connect = self.onMqttConnect
-            self.mqttClient_.on_message = self.onMqttMessage
-            self.mqttClient_.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT)
-            self.mqttClient_.loop_start()
+            self.client_ = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+            self.client_.on_connect = lambda c, u, f, rc, p: self.onConnect(c, topics, rc)
+            self.client_.on_message = self.onMessage
+            self.client_.connect(self.host_, self.port_)
+            self.client_.loop_start()
         except Exception as e:
-            print(f"[Factory Twin] MQTT connect error: {e}")
+            print(f"[Mqtt Client] Connect error: {e}")
 
-    def onMqttConnect(self, client, userdata, flags, reason_code, properties):
+    def disconnect(self):
+        if self.client_:
+            self.client_.loop_stop()
+            self.client_.disconnect()
+
+    def onConnect(self, client, topics: list[str], reason_code):
         if reason_code == 0:
-            print("[Factory Twin] Connect to MQTT success")
-            for topic in MACHINE_TOPICS:
+            print(f"[Mqtt Client] Connect success: {self.host_}:{self.port_}")
+            for topic in topics:
                 client.subscribe(topic)
         else:
-            print(f"[Factory Twin] Connect fail: {reason_code}")
+            print(f"[Mqtt Client] Connect fail: {reason_code}")
 
-    def onMqttMessage(self, client, userdata, msg):
+    def onMessage(self, client, userdata, msg):
         try:
             data = json.loads(msg.payload.decode())
-            print(f"[Factory Twin] {msg.topic} -> {data}")
-            # TODO: 更新 3D 場景中的機台狀態
+            if self.messageCallback_:
+                self.messageCallback_(msg.topic, data)
+        except json.JSONDecodeError as e:
+            print(f"[Mqtt Client] Json parse error: {e}")
+```
+
+#### base_extension.py（抽象基底類別）
+
+```python
+import omni.ext
+from .mqtt_client import MqttClient
+
+class BaseMqttExtension(omni.ext.IExt):
+
+    MQTT_HOST = "localhost"
+    MQTT_PORT = 1883
+    MQTT_TOPICS: list[str] = []
+
+    def on_startup(self, ext_id):
+        print(f"[{self.__class__.__name__}] activated")
+        self.mqttClient_ = MqttClient(self.MQTT_HOST, self.MQTT_PORT)
+        self.mqttClient_.setMessageCallback(self.onMqttMessage)
+        self.onExtensionStartup(ext_id)
+        self.mqttClient_.connect(self.MQTT_TOPICS)
+
+    def on_shutdown(self):
+        print(f"[{self.__class__.__name__}] shutdown")
+        self.onExtensionShutdown()
+        if hasattr(self, 'mqttClient_') and self.mqttClient_:
+            self.mqttClient_.disconnect()
+            self.mqttClient_ = None
+
+    def onExtensionStartup(self, ext_id):
+        pass  # Hook 給子類別覆寫
+
+    def onExtensionShutdown(self):
+        pass  # Hook 給子類別覆寫
+
+    def onMqttMessage(self, topic: str, data: dict):
+        raise NotImplementedError  # 子類別必須實作
+```
+
+#### extension.py（實作類別）
+
+```python
+import omni.kit.app
+from pxr import Gf, UsdGeom
+import omni.usd
+import threading
+from .base_extension import BaseMqttExtension
+
+MACHINE_USD_PATHS = {
+    "factory/machine_01/status": "/World/Machine_01",
+    "factory/machine_02/status": "/World/Machine_02",
+    "factory/machine_03/status": "/World/Machine_03",
+}
+
+class FactoryTwinExtension(BaseMqttExtension):
+
+    MQTT_BROKER_HOST = "localhost"
+    MQTT_BROKER_PORT = 1883
+    MQTT_TOPICS = list(MACHINE_USD_PATHS.keys())
+
+    def onExtensionStartup(self, ext_id):
+        self.pendingUpdates_ = {}
+        self.lock_ = threading.Lock()
+        # 訂閱 Omniverse 更新事件（主執行緒）
+        self.updateSub_ = omni.kit.app.get_app().get_update_event_stream()\
+            .create_subscription_to_pop(
+            self.onUpdate, name="factory_twin_update"
+        )
+
+    def onUpdate(self, event):
+        # 在主執行緒中安全更新 USD 場景
+        with self.lock_:
+            updates = dict(self.pendingUpdates_)  # 複製字典
+            self.pendingUpdates_.clear()
+        for usd_path, color in updates.items():
+            self.updateMachineColor(usd_path, color)
+
+    def onExtensionShutdown(self):
+        self.updateSub_ = None
+
+    def onMqttMessage(self, topic: str, data: dict):
+        # MQTT 執行緒中執行
+        usd_path = MACHINE_USD_PATHS.get(topic)
+        if not usd_path:
+            return
+        status = data.get("status", "unknown")
+        color = self.statusToColor(status)
+        with self.lock_:
+            self.pendingUpdates_[usd_path] = color
+
+    def statusToColor(self, status: str) -> Gf.Vec3f:
+        colorMap = {
+            "running": Gf.Vec3f(0.0, 1.0, 0.0),  # 綠色
+            "warning": Gf.Vec3f(1.0, 1.0, 0.0),  # 黃色
+            "error": Gf.Vec3f(1.0, 0.0, 0.0),    # 紅色
+        }
+        return colorMap.get(status, Gf.Vec3f(0.5, 0.5, 0.5))  # 預設灰色
+
+    def updateMachineColor(self, usd_path: str, color: Gf.Vec3f):
+        try:
+            stage = omni.usd.get_context().get_stage()
+            prim = stage.GetPrimAtPath(usd_path)
+            if not prim.IsValid():
+                print(f"[Factory Twin] Not found prim: {usd_path}")
+                return
+            UsdGeom.Gprim(prim).GetDisplayColorAttr().Set(
+                [(color[0], color[1], color[2])]
+            )
         except Exception as e:
-            print(f"[Factory Twin] Message error: {e}")
+            print(f"[Factory Twin] Update color error: {usd_path} -> {e}")
 ```
 
 ### Docker 基礎設施
@@ -290,22 +392,39 @@ services:
 | `client.on_message` | 收到訊息回呼（callback） |
 | `client.subscribe(topic)` | 訂閱 topic |
 
-### Omniverse Kit（新增）
+### Omniverse Kit
 
 | API | 用途 |
 |-----|------|
 | `omni.ext.IExt` | Extension 基底類別 |
 | `on_startup(ext_id)` | Extension 啟動時呼叫 |
 | `on_shutdown()` | Extension 關閉時呼叫 |
+| `omni.kit.app.get_app()` | 取得應用程式實例 |
+| `get_update_event_stream()` | 取得更新事件串流 |
+| `create_subscription_to_pop()` | 訂閱更新事件（每幀呼叫） |
+
+### USD / pxr（新增）
+
+| API | 用途 |
+|-----|------|
+| `omni.usd.get_context().get_stage()` | 取得目前的 USD Stage |
+| `stage.GetPrimAtPath(path)` | 取得指定路徑的 Prim |
+| `prim.IsValid()` | 檢查 Prim 是否存在 |
+| `UsdGeom.Gprim(prim)` | 將 Prim 轉為幾何物件 |
+| `GetDisplayColorAttr().Set()` | 設定顯示顏色 |
+| `Gf.Vec3f(r, g, b)` | 3D 向量（RGB 顏色） |
 
 ### Python 標準庫
 
 | 模組 | 函式 | 用途 |
 |------|------|------|
 | `json` | `dumps()` | 字典轉 JSON 字串 |
+| `json` | `loads()` | JSON 字串轉字典 |
 | `random` | `uniform()` | 隨機浮點數 |
 | `random` | `choice()` | 隨機選擇 |
 | `time` | `sleep()` | 延遲執行 |
+| `threading` | `Lock()` | 執行緒鎖 |
+| `typing` | `Callable`, `Optional` | 類型提示 |
 
 ## Python 語法技巧
 
@@ -318,6 +437,13 @@ services:
 | lambda 預設參數 | `lambda msg, t=topic: fn(msg, t)` |
 | try/except/finally | 確保資源釋放 |
 | while 重試迴圈 | 連線重試機制 |
+| `list[str]` | Python 3.9+ 泛型類型提示 |
+| `Optional[Callable]` | 可選回呼類型 |
+| `hasattr(obj, 'attr')` | 安全屬性檢查 |
+| `raise NotImplementedError` | 抽象方法模式 |
+| `dict(d)` | 字典淺複製 |
+| `with lock:` | 執行緒安全區塊 |
+| `self.__class__.__name__` | 取得類別名稱 |
 
 ## 執行方式
 
@@ -347,21 +473,25 @@ mosquitto_sub -h localhost -t "factory/#"
 2. 透過 ROS2 topic 發布資料
 3. 為 Omniverse 或其他視覺化平台提供資料來源
 
-**整合架構（更新）**：
+**整合架構（v2）**：
 ```
 machine_publisher.py (ROS2 Publisher)
        ↓ ROS2 Topic
 ros2_to_mqtt.py (Bridge)
        ↓ MQTT (Mosquitto Broker)
        ↓
-┌──────┴──────────────────────┐
-│                             │
-│  FactoryTwinExtension       │ ← Omniverse Extension（新增）
-│  (omniverse_factory_twin)   │
-│                             │
-└──────┬──────────────────────┘
+┌──────┴──────────────────────────────────────┐
+│  Omniverse Extension                         │
+│                                              │
+│  MqttClient ──→ BaseMqttExtension            │
+│                      ↑ 繼承                  │
+│               FactoryTwinExtension           │
+│                      ↓                       │
+│              USD Scene Update                │
+│       (Machine_01/02/03 顏色變化)            │
+└──────────────────────────────────────────────┘
        ↓
-  Omniverse 3D 視覺化
+  Omniverse 3D 視覺化（即時顏色反映狀態）
 ```
 
 ## 已完成
@@ -374,6 +504,10 @@ ros2_to_mqtt.py (Bridge)
 - [x] Bridge 錯誤處理（JSON 解析、發布異常）
 - [x] Omniverse Extension 基礎架構
 - [x] Extension MQTT 訂閱機制
+- [x] MQTT 客戶端封裝（MqttClient）
+- [x] 抽象基底類別（BaseMqttExtension）
+- [x] 執行緒安全場景更新（Lock + pendingUpdates）
+- [x] USD 場景顏色更新（根據 status 變色）
 
 ## 待改進
 
@@ -382,8 +516,11 @@ ros2_to_mqtt.py (Bridge)
 3. ~~與 Omniverse 整合測試~~ ✓ Extension 已建立
 4. ~~加入 Subscriber 節點接收控制指令~~ ✓ 已實作 Bridge
 5. MQTT → ROS2 反向橋接（控制指令）
-6. Extension 連接 3D 場景物件
-7. 根據感測器資料更新機台視覺狀態
+6. ~~Extension 連接 3D 場景物件~~ ✓ 已實作 USD 更新
+7. ~~根據感測器資料更新機台視覺狀態~~ ✓ 已實作顏色變化
+8. 根據溫度/振動值漸變顏色
+9. 加入 UI 面板顯示即時數據
+10. 實作告警視覺效果（閃爍、發光）
 
 ## 相關頁面
 

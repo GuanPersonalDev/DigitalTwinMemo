@@ -474,3 +474,122 @@ ROS2 Publisher → MQTT Bridge → Mosquitto → Omniverse Extension
 - 134：Bad user name or password
 - 135：Not authorized
 - 136：Server unavailable
+
+## [2026-04-19] update | 新增 Omniverse Extension 常見問題
+
+在 `synthesis/常見問題與解法.md` 中新增 Omniverse Extension 相關章節：
+
+### 新增問題（4 個）
+
+| 問題 | 原因 | 解法 |
+|------|------|------|
+| Extension Manager 找不到 Extension | `folders.'++'` 路徑未設定 | 加入 `${app}/../../../../source/extensions` |
+| No module named 'paho' | Omniverse 使用獨立 Python 環境 | 用 Omniverse 的 python.exe 安裝 |
+| MQTT WinError 10061 | Docker Mosquitto 未啟動 | `docker compose up -d` |
+| Extension 與 Git 管理衝突 | 檔案分散兩個專案 | Windows Junction 連結 |
+
+### 關鍵技巧
+
+**Windows Junction**：
+```powershell
+mklink /J "目標路徑" "來源路徑"
+```
+- 類似 Linux symlink
+- Extension 原始碼保留在專案中
+- Git 追蹤不受影響
+
+## [2026-04-22] update | 專案重構：Omniverse Extension 架構升級
+
+專案進行重大重構，建立模組化的 Extension 架構。
+
+### 新增檔案
+
+```
+omniverse_factory_twin/
+├── mqtt_client.py      # MQTT 客戶端封裝
+├── base_extension.py   # 抽象基底類別
+└── extension.py        # 重構為繼承 BaseMqttExtension
+```
+
+### 架構變更
+
+```
+MqttClient（通訊封裝）
+    ↑ 使用
+BaseMqttExtension（抽象基底）
+    ↑ 繼承
+FactoryTwinExtension（實作）
+    → USD Scene 更新
+```
+
+### 新增功能
+
+| 功能 | 說明 |
+|------|------|
+| 執行緒安全更新 | `Lock + pendingUpdates` 模式 |
+| USD 場景顏色變化 | 根據 status 更新機台顏色 |
+| Hook 方法模式 | `onExtensionStartup()` / `onExtensionShutdown()` |
+| 抽象方法 | `onMqttMessage()` 強制子類別實作 |
+
+### 更新頁面
+
+**`sources/factory-floor-digital-twin.md`**：
+- 更新檔案結構
+- 新增 mqtt_client.py、base_extension.py 完整程式碼
+- 更新 extension.py 為重構後版本
+- 新增 USD/pxr API 說明
+- 更新已完成清單
+
+**`synthesis/Omniverse-Extension-開發.md`**：
+- 新增三層架構說明
+- 新增執行緒安全模式
+- 新增 USD API 快速參考
+- 新增設計模式摘要表
+
+**`synthesis/Python-語法技巧.md`**：
+- 新增類型提示（`list[str]`、`Optional[Callable]`）
+- 新增執行緒安全（`threading.Lock`）
+- 新增抽象方法模式（`NotImplementedError`）
+- 新增安全屬性檢查（`hasattr`）
+- 新增 `self.__class__.__name__`
+
+### 新增 Python 語法
+
+| 語法 | 範例 |
+|------|------|
+| `list[str]` | Python 3.9+ 泛型類型提示 |
+| `Optional[Callable]` | 可選回呼類型 |
+| `threading.Lock()` | 執行緒鎖 |
+| `with self.lock_:` | 執行緒安全區塊 |
+| `dict(d)` | 字典淺複製 |
+| `hasattr(obj, 'attr')` | 安全屬性檢查 |
+| `raise NotImplementedError` | 抽象方法 |
+| `self.__class__.__name__` | 取得類別名稱 |
+
+### 新增 USD API
+
+| API | 用途 |
+|-----|------|
+| `omni.usd.get_context().get_stage()` | 取得 Stage |
+| `stage.GetPrimAtPath()` | 取得 Prim |
+| `prim.IsValid()` | 檢查存在 |
+| `UsdGeom.Gprim(prim)` | 轉為幾何物件 |
+| `GetDisplayColorAttr().Set()` | 設定顏色 |
+| `Gf.Vec3f(r, g, b)` | 顏色向量 |
+
+## [2026-04-22] add | 新增 Omniverse Extension 執行緒問題
+
+在 `synthesis/常見問題與解法.md` 中新增 4 個 Omniverse 開發問題：
+
+| 問題 | 原因 | 解法 |
+|------|------|------|
+| ChangeProperty 執行失敗 | commands 不能在背景執行緒呼叫 | 改用 `UsdGeom.Gprim().GetDisplayColorAttr().Set()` |
+| 顏色沒有即時更新 | `push()` 在某些 Kit 版本無效 | 改用 `create_subscription_to_pop()` |
+| `lock_` 找不到 | 方法簽名不匹配導致覆寫失敗 | 統一 `onExtensionStartup(self, ext_id)` |
+| 重啟後重複 subscribe | `on_shutdown` 未釋放連線 | 加入 `mqttClient_.disconnect()` |
+
+### 關鍵教訓
+
+1. **執行緒安全**：USD 操作必須在主執行緒，MQTT 在背景執行緒
+2. **方法覆寫**：子類別方法簽名必須完全匹配父類別
+3. **資源清理**：`on_shutdown()` 必須釋放所有資源
