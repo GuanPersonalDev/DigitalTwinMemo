@@ -2,9 +2,9 @@
 title: Omniverse Extension 開發
 type: synthesis
 created: 2026-04-19
-updated: 2026-04-22
+updated: 2026-04-29
 sources: [factory-floor-digital-twin]
-tags: [Omniverse, Extension, Python, 開發, USD, 執行緒]
+tags: [Omniverse, Extension, Python, 開發, USD, 執行緒, 日誌]
 ---
 
 # Omniverse Extension 開發
@@ -392,14 +392,141 @@ extension_root/
     └── __init__.py       # 必須存在
 ```
 
+## 日誌記錄系統（04-29 新增）
+
+### 架構
+
+```
+FactoryLog（工廠日誌）
+├── machines_: Dict[str, MachineLog]
+├── record(machine_id, param, data)
+├── getLatestMode(machine_id)
+└── getMachineLatestTopic(machine_id, param)
+
+MachineLog（單機日誌）
+├── entries_: deque(maxlen=50)  # 固定大小循環緩衝區
+├── append(param, data)
+└── getLatestByTopic(param)
+```
+
+### 實作
+
+```python
+from collections import deque
+from datetime import datetime
+
+class MachineLog:
+    MAX_ENTRIES = 50
+
+    def __init__(self):
+        self.entries_ = deque(maxlen=self.MAX_ENTRIES)
+
+    def append(self, param: str, data: dict):
+        self.entries_.append((datetime.now(), param, data))
+
+    def getLatestByTopic(self, param: str):
+        for entry in reversed(self.entries_):
+            if entry[1] == param:
+                return entry
+        return None
+
+class FactoryLog:
+    def __init__(self):
+        self.machines_: dict[str, MachineLog] = {}
+
+    def record(self, machine_id: str, param: str, data: dict):
+        if machine_id not in self.machines_:
+            self.machines_[machine_id] = MachineLog()
+        self.machines_[machine_id].append(param, data)
+```
+
+### 整合到 Extension
+
+```python
+def onMqttMessage(self, topic: str, data: dict):
+    result = parseMqttTopic(topic)
+    if not result:
+        return
+    machine_id, param = result
+    with self.lock_:
+        self.factoryLog_.record(machine_id, param, data)
+
+def onUpdate(self, event):
+    for machine_id, info in self.machineInfos_.items():
+        # 從日誌計算顏色
+        color, opacity = info.calc_color(
+            self.factoryLog_, self.factoryConfig_
+        )
+        self.updateMachineColor(info.usd_path_, color, opacity)
+```
+
+## 嚴重程度與視覺反饋（04-29 新增）
+
+### 嚴重程度計算
+
+```python
+def computeSeverity(self, param: str, value: float) -> tuple[str, int]:
+    """
+    根據參數值計算嚴重程度
+    回傳 (severity_name, rank)
+    """
+    thresholds = self.thresholds_[param]
+    if value >= thresholds["error"]:
+        return ("ERROR", 2)
+    elif value >= thresholds["warning"]:
+        return ("WARNING", 1)
+    else:
+        return ("NORMAL", 0)
+```
+
+### 顏色解析
+
+```python
+def resolveColor(self, mode: str, severity: str) -> list[float]:
+    """根據操作模式和嚴重程度解析顏色"""
+    if mode in ["SHUTDOWN", "OFFLINE"]:
+        # 關機/離線使用灰色
+        return self.modeColors_[mode]
+    # 運行中根據嚴重程度
+    return self.severityColors_[severity]
+```
+
+### 透明度控制
+
+```python
+def getOpacity(self, mode: str) -> float:
+    """根據操作模式取得透明度"""
+    return {
+        "RUNNING": 1.0,
+        "IDLE": 0.6,
+        "SHUTDOWN": 0.4,
+        "OFFLINE": 0.3
+    }.get(mode, 1.0)
+```
+
+### 更新 USD 顏色與透明度
+
+```python
+def updateMachineColor(self, usd_path: str, color: list, opacity: float):
+    stage = omni.usd.get_context().get_stage()
+    prim = stage.GetPrimAtPath(usd_path)
+    if not prim.IsValid():
+        return
+    gprim = UsdGeom.Gprim(prim)
+    gprim.GetDisplayColorAttr().Set([Gf.Vec3f(*color)])
+    gprim.GetDisplayOpacityAttr().Set([opacity])  # 新增透明度
+```
+
 ## 下一步
 
 - [x] 連接 3D 場景物件 ✓
 - [x] 根據狀態變更顏色 ✓
-- [ ] 根據溫度/振動值漸變顏色
+- [x] 根據溫度/振動值漸變顏色 ✓（嚴重程度計算）
+- [x] 透明度控制 ✓
 - [ ] 根據振動播放動畫
 - [ ] 加入 UI 面板顯示即時數據
 - [ ] 實作告警視覺效果（閃爍、發光）
+- [ ] 持久化日誌
 
 ## 設計模式摘要
 
@@ -410,6 +537,8 @@ extension_root/
 | 回呼注入 | 解耦訊息處理 | `setMessageCallback()` |
 | 執行緒安全更新 | 跨執行緒資料傳遞 | `Lock + pendingUpdates` |
 | 狀態對應 | 資料→視覺轉換 | `statusToColor()` |
+| 循環緩衝區 | 固定大小日誌 | `deque(maxlen=50)` |
+| 組態分離 | TOML 設定檔 | `FactoryConfig` |
 
 ## 相關頁面
 

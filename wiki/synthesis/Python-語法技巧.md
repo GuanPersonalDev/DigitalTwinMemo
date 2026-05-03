@@ -2,9 +2,9 @@
 title: Python 語法技巧
 type: synthesis
 created: 2026-04-17
-updated: 2026-04-22
+updated: 2026-04-29
 sources: [factory-floor-digital-twin]
-tags: [程式碼, Python, 語法, 類型提示, 執行緒]
+tags: [程式碼, Python, 語法, 類型提示, 執行緒, TOML, dataclass]
 ---
 
 # Python 語法技巧
@@ -443,6 +443,181 @@ def make_handler(captured_topics):
     return handler
 
 self.client_.on_connect = make_handler(topics)
+```
+
+## dataclass（資料類別）
+
+### 基本用法
+
+Python 3.7+ 提供的裝飾器，自動生成 `__init__`、`__repr__` 等方法：
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class ScriptPhase:
+    mode: str
+    duration: int | None = None  # 預設值
+
+# 使用
+phase = ScriptPhase(mode="RUNNING", duration=5)
+print(phase)  # ScriptPhase(mode='RUNNING', duration=5)
+```
+
+### 常用參數
+
+```python
+@dataclass(frozen=True)   # 不可變（hashable）
+@dataclass(order=True)    # 自動生成比較方法
+@dataclass(slots=True)    # 使用 __slots__（Python 3.10+）
+```
+
+## collections.deque
+
+### 固定大小佇列
+
+```python
+from collections import deque
+
+# 建立固定大小的佇列（循環緩衝區）
+buffer = deque(maxlen=50)
+
+# 加入元素（超過 maxlen 時自動移除最舊的）
+buffer.append("item1")
+buffer.append("item2")
+
+# 從右側/左側加入
+buffer.append("right")      # 加到右側
+buffer.appendleft("left")   # 加到左側
+
+# 取出元素
+buffer.pop()      # 從右側取出
+buffer.popleft()  # 從左側取出
+
+# 反向遍歷
+for item in reversed(buffer):
+    print(item)
+```
+
+### 實際應用（日誌緩衝區）
+
+```python
+class MachineLog:
+    MAX_ENTRIES = 50
+
+    def __init__(self):
+        self.entries_ = deque(maxlen=self.MAX_ENTRIES)
+
+    def append(self, data):
+        self.entries_.append((datetime.now(), data))
+
+    def getLatest(self, param: str):
+        for entry in reversed(self.entries_):
+            if entry[1].get("param") == param:
+                return entry
+        return None
+```
+
+## TOML 解析
+
+### 標準庫（Python 3.11+）
+
+```python
+import tomllib
+
+with open("config.toml", "rb") as f:  # 注意：必須是 "rb"
+    config = tomllib.load(f)
+
+print(config["parameters"]["temperature"]["warning"])
+```
+
+### 相容寫法
+
+```python
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # pip install tomli
+
+with open("config.toml", "rb") as f:
+    config = tomllib.load(f)
+```
+
+### TOML 語法快速參考
+
+```toml
+# 基本型別
+string = "hello"
+integer = 42
+float = 3.14
+boolean = true
+
+# 陣列
+tags = ["a", "b", "c"]
+
+# 表格（字典）
+[server]
+host = "localhost"
+port = 1883
+
+# 巢狀表格
+[parameters.temperature]
+unit = "°C"
+warning = 70.0
+error = 85.0
+
+# 表格陣列
+[[machines]]
+id = "machine_01"
+name = "機器 1"
+
+[[machines]]
+id = "machine_02"
+name = "機器 2"
+```
+
+對應 Python：
+```python
+{
+    "string": "hello",
+    "tags": ["a", "b", "c"],
+    "server": {"host": "localhost", "port": 1883},
+    "parameters": {"temperature": {"unit": "°C", "warning": 70.0}},
+    "machines": [
+        {"id": "machine_01", "name": "機器 1"},
+        {"id": "machine_02", "name": "機器 2"}
+    ]
+}
+```
+
+## 新式類型提示
+
+### Python 3.10+ Union 語法
+
+```python
+# 舊語法
+from typing import Union, Optional
+value: Union[str, int] = "hello"
+optional: Optional[str] = None
+
+# Python 3.10+ 語法
+value: str | int = "hello"
+optional: str | None = None
+```
+
+### 函式回傳 tuple
+
+```python
+def parseTopic(topic: str) -> tuple[str, str] | None:
+    parts = topic.split("/")
+    if len(parts) != 3:
+        return None
+    return parts[1], parts[2]
+
+# 使用
+result = parseTopic("factory/machine_01/temp")
+if result:
+    machine_id, param = result
 ```
 
 ## 相關頁面

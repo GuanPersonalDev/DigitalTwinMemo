@@ -593,3 +593,79 @@ FactoryTwinExtension（實作）
 1. **執行緒安全**：USD 操作必須在主執行緒，MQTT 在背景執行緒
 2. **方法覆寫**：子類別方法簽名必須完全匹配父類別
 3. **資源清理**：`on_shutdown()` 必須釋放所有資源
+
+## [2026-05-03] update | 更新專案進度（04-22 → 04-29）
+
+根據 GitHub 倉庫最新 commit 更新知識庫，涵蓋 04-22 到 04-29 的變更。
+
+### 新增功能
+
+**1. config 組態模組**
+- `config/config_loader.py` - FactoryConfig、MachineConfig 類別
+- `config/machines.toml` - 4 台機台設定（新增 machine_04）
+- `config/thresholds.toml` - 閾值設定（溫度、振動）
+- `config/topic_resolver.py` - Topic 命名規則統一管理
+
+**2. 資料產生器重構**
+- `ros2_publisher/topic_data_generator.py` - MachineState、ScriptPhase
+- 支援腳本式狀態變化（模擬異常流程）
+- machine_04 使用預定義腳本
+
+**3. Topic 分割**
+- 舊：`/factory/machine_01/status`（所有資料一個 Topic）
+- 新：每參數獨立 Topic
+  - `/factory/machine_01/temperature`
+  - `/factory/machine_01/vibration`
+  - `/factory/machine_01/operation_mode`
+
+**4. 日誌記錄系統**
+- `omniverse_extension/factory_log.py` - FactoryLog、MachineLog
+- 固定大小循環緩衝區（deque maxlen=50）
+- 支援查詢最新參數值
+
+**5. 嚴重程度計算**
+- 根據溫度/振動值計算 NORMAL/WARNING/ERROR
+- 溫度：70°C warning, 85°C error
+- 振動：5.0 warning, 10.0 error
+
+**6. 視覺反饋強化**
+- 透明度控制（RUNNING=1.0, IDLE=0.6, SHUTDOWN=0.4, OFFLINE=0.3）
+- 顏色根據嚴重程度變化
+
+**7. 外部資產**
+- `external_assets/USD_Explorer_Sample_NVD@10011/`
+
+### 更新的知識庫頁面
+
+**來源**：
+- `sources/factory-floor-digital-twin.md` - 全面更新
+
+**綜合分析**：
+- `synthesis/Omniverse-Extension-開發.md` - 新增日誌系統、嚴重程度
+- `synthesis/Python-語法技巧.md` - 新增 dataclass、deque、TOML
+
+### 新增 Commit 列表
+
+| 日期 | SHA | 說明 |
+|------|-----|------|
+| 04-25 | cab9b1c | 新增 config 模組 |
+| 04-25 | 6e916bb | Publisher 使用 config |
+| 04-25 | 635f17e | Bridge 使用 config |
+| 04-26 | fefcc22 | Topic 分割 |
+| 04-26 | b44223a | Extension 使用 config |
+| 04-26 | cb1bcee | 新增外部資產 |
+| 04-28 | 94dab78 | 修正資料模擬邏輯 |
+| 04-28 | 9d6213c | 新增 machine_04 |
+| 04-28 | fe2aa81 | 修正 Topic 覆寫 bug |
+| 04-29 | 1dee3d8 | 新增日誌系統 |
+| 04-29 | beb9187 | Extension 整合日誌 |
+| 04-29 | fbfc8e5 | 修正欄位錯誤 |
+
+### 新增 Python 語法
+
+| 語法 | 說明 |
+|------|------|
+| `@dataclass` | 資料類別裝飾器 |
+| `deque(maxlen=N)` | 固定大小佇列 |
+| `tomllib` / `tomli` | TOML 解析 |
+| `tuple[str, str] \| None` | 新式 Union 語法 |

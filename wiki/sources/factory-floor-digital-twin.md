@@ -2,9 +2,9 @@
 title: factory-floor-digital-twin 專案
 type: source
 created: 2026-04-17
-updated: 2026-04-22
+updated: 2026-04-29
 original: https://github.com/GuanPersonalDev/factory-floor-digital-twin
-tags: [專案, ROS2, 數位孿生, Python, MQTT, Docker, Omniverse, USD]
+tags: [專案, ROS2, 數位孿生, Python, MQTT, Docker, Omniverse, USD, TOML]
 ---
 
 # factory-floor-digital-twin 專案
@@ -15,27 +15,37 @@ tags: [專案, ROS2, 數位孿生, Python, MQTT, Docker, Omniverse, USD]
 
 ## 專案概述
 
-工廠地板數位孿生專案，使用 ROS2 模擬工廠機台感測器資料發布。
+工廠地板數位孿生專案，使用 ROS2 模擬工廠機台感測器資料發布，透過 MQTT 傳送到 Omniverse 進行 3D 視覺化。
 
 ## 檔案結構
 
 ```
 factory-floor-digital-twin/
-├── python/
-│   └── factory_publisher.py              # 早期版本（未完成）
+├── config/                               # 組態模組（新增）
+│   ├── config_loader.py                  # 組態載入器
+│   ├── machines.toml                     # 機台設定
+│   ├── thresholds.toml                   # 閾值設定
+│   └── topic_resolver.py                 # Topic 解析器
 ├── ros2_publisher/
-│   └── machine_publisher.py              # ROS2 Publisher 節點
+│   ├── machine_publisher.py              # ROS2 Publisher 節點（重構）
+│   ├── topic_data_generator.py           # 資料產生器（新增）
+│   └── requirements.txt
 ├── bridge/
-│   ├── ros2_to_mqtt.py                   # ROS2 → MQTT 橋接器
-│   └── config.py                         # 組態設定
-├── omniverse_extension/                  # Omniverse Extension
+│   ├── ros2_to_mqtt.py                   # ROS2 → MQTT 橋接器（重構）
+│   └── ros2_to_mqtt_config.py            # Bridge 組態
+├── omniverse_extension/
 │   ├── config/
 │   │   └── extension.toml                # Extension 設定檔
 │   └── omniverse_factory_twin/
 │       ├── __init__.py                   # 模組初始化
-│       ├── mqtt_client.py                # MQTT 客戶端封裝（新增）
-│       ├── base_extension.py             # 抽象基底類別（新增）
+│       ├── mqtt_client.py                # MQTT 客戶端封裝
+│       ├── base_extension.py             # 抽象基底類別
+│       ├── factory_log.py                # 日誌記錄系統（新增）
 │       └── extension.py                  # Extension 主程式（重構）
+├── external_assets/                      # 外部資產（新增）
+│   └── USD_Explorer_Sample_NVD@10011/    # USD 場景資產
+├── docs/
+│   └── architecture.png                  # 架構圖
 ├── mosquitto/
 │   └── config/mosquitto.conf             # MQTT Broker 設定
 ├── docker-compose.yml                    # Docker 服務定義
@@ -44,34 +54,187 @@ factory-floor-digital-twin/
 
 ## 核心程式碼分析
 
-### machine_publisher.py
+### config 模組（新增）
 
-**功能**：模擬 3 台機台的感測器資料，定時發布到 ROS2 topic
+專案在 04-25 引入集中式組態管理，將設定從程式碼中分離。
+
+#### config_loader.py
+
+**功能**：載入 TOML 組態檔，提供機台與閾值設定
+
+**架構**：
+```
+MachineConfig（機台設定）
+├── machine_id: str           # 機台 ID
+├── display_name: str         # 顯示名稱
+├── usd_prim_path: str        # USD 路徑
+├── location: str             # 位置區域
+├── getRos2Topic(param)       # 取得 ROS2 Topic
+└── getMqttTopic(param)       # 取得 MQTT Topic
+
+FactoryConfig（工廠設定）
+├── machines: List[MachineConfig]   # 機台列表
+├── getMachineById(id)              # 依 ID 取得機台
+├── computeSeverity(param, value)   # 計算嚴重程度
+├── resolveColor(mode, severity)    # 解析顏色
+└── getOpacity(mode)                # 取得透明度
+```
+
+**嚴重程度定義**：
+| 等級 | 說明 | 數值 |
+|------|------|------|
+| NORMAL | 正常 | 0 |
+| WARNING | 警告 | 1 |
+| ERROR | 錯誤 | 2 |
+
+**操作模式**：
+| 模式 | 透明度 | 說明 |
+|------|--------|------|
+| RUNNING | 1.0 | 運行中 |
+| IDLE | 0.6 | 閒置 |
+| SHUTDOWN | 0.4 | 關機 |
+| OFFLINE | 0.3 | 離線 |
+
+#### machines.toml
+
+```toml
+[[machines]]
+machine_id = "machine_01"
+display_name = "機器手臂 01"
+usd_prim_path = "/World/Machine_01"
+location = "Zone A"
+
+[[machines]]
+machine_id = "machine_04"
+display_name = "機器手臂 04（狀態異常模擬）"
+usd_prim_path = "/World/Machine_04"
+location = "Zone D"
+```
+
+#### thresholds.toml
+
+```toml
+[parameters.temperature]
+unit = "°C"
+warning = 70.0
+error = 85.0
+
+[parameters.vibration]
+unit = "mm/s"
+warning = 5.0
+error = 10.0
+
+[operation_mode]
+valid_modes = "RUNNING, IDLE, SHUTDOWN, OFFLINE"
+
+[operation_mode.visual.SHUTDOWN]
+opacity = 0.4
+color = [0.4, 0.4, 0.4]
+
+[severity_colors]
+normal = [0.0, 0.8, 0.0]    # 綠色
+warning = [1.0, 0.6, 0.0]   # 橘色
+error = [1.0, 0.0, 0.0]     # 紅色
+```
+
+#### topic_resolver.py
+
+**功能**：統一管理 Topic 命名規則
+
+```python
+_NAMESPACE = "factory"
+
+def getRos2Topic(machine_id: str, param: str) -> str:
+    return f"/{_NAMESPACE}/{machine_id}/{param}"
+    # 例：/factory/machine_01/temperature
+
+def getMqttTopic(machine_id: str, param: str) -> str:
+    return f"{_NAMESPACE}/{machine_id}/{param}"
+    # 例：factory/machine_01/temperature
+
+def getMqttSubscribePattern(machine_id: str) -> str:
+    return f"{_NAMESPACE}/{machine_id}/+"
+    # 例：factory/machine_01/+（訂閱單機所有參數）
+
+def getAllMachinesMqttPattern() -> str:
+    return f"{_NAMESPACE}/#"
+    # 例：factory/#（訂閱所有機台）
+
+def parseMqttTopic(topic: str) -> tuple[str, str] | None:
+    # "factory/machine_01/temperature" -> ("machine_01", "temperature")
+    parts = topic.split("/")
+    if len(parts) != 3 or parts[0] != _NAMESPACE:
+        return None
+    return parts[1], parts[2]
+```
+
+### topic_data_generator.py（新增）
+
+**功能**：模擬機台狀態，支援腳本式狀態變化
+
+**架構**：
+```
+ScriptPhase（腳本階段）
+├── mode: str       # 操作模式
+└── duration: int   # 持續時間（秒），None 為永久
+
+MachineState（機台狀態）
+├── machine_id: str
+├── script: List[ScriptPhase]    # 狀態腳本
+├── getCurrentMode()             # 取得當前模式
+├── getParamValue(param)         # 取得參數值
+└── getAllTopics()               # 取得所有 Topic 資料
+```
+
+**預設參數範圍**：
+| 參數 | 最小值 | 最大值 |
+|------|--------|--------|
+| temperature | 60°C | 95°C |
+| vibration | 0.1 mm/s | 5.0 mm/s |
+
+**腳本式模擬範例**：
+```python
+# machine_04 使用預定義腳本
+script = [
+    ScriptPhase(mode="RUNNING", duration=5),   # 運行 5 秒
+    ScriptPhase(mode="IDLE", duration=2),      # 閒置 2 秒
+    ScriptPhase(mode="SHUTDOWN", duration=None) # 永久關機
+]
+state = MachineState("machine_04", script=script)
+```
+
+### machine_publisher.py（重構）
+
+**功能**：模擬 4 台機台的感測器資料，每個參數獨立 Topic
 
 **架構**：
 ```
 MachinePublisher (Node)
-├── publishers_: Dict[str, Publisher]  # 3 個 publisher
-├── timer: Timer                        # 定時器（1秒）
-├── generateMachineData()               # 生成模擬資料
-└── publishMachineData()                # 發布資料
+├── factoryConfig_: FactoryConfig     # 組態
+├── machineStates_: Dict[str, MachineState]  # 機台狀態
+├── publishers_: Dict[str, Publisher]  # Publisher（每參數一個）
+├── timer: Timer                       # 定時器（1秒）
+└── publishMachineData()               # 發布資料
 ```
 
-**Topic 結構**：
+**Topic 結構（重構後）**：
 ```
-/factory/machine_01/status  →  {"machine_id", "temperature", "vibration", "status"}
-/factory/machine_02/status  →  ...
-/factory/machine_03/status  →  ...
+/factory/machine_01/temperature      →  {"value": 75.5}
+/factory/machine_01/vibration        →  {"value": 2.3}
+/factory/machine_01/operation_mode   →  {"value": "RUNNING"}
+/factory/machine_02/temperature      →  ...
+...
+/factory/machine_04/operation_mode   →  {"value": "SHUTDOWN"}
 ```
 
-**模擬資料範圍**：
-| 欄位 | 類型 | 範圍 |
+**參數定義**：
+| 參數 | 類型 | 說明 |
 |------|------|------|
-| temperature | float | 60.0 ~ 95.0 |
-| vibration | float | 0.1 ~ 5.0 |
-| status | string | running / warning / error |
+| temperature | float | 溫度（°C） |
+| vibration | float | 振動（mm/s） |
+| operation_mode | string | 操作模式 |
 
-### ros2_to_mqtt.py
+### ros2_to_mqtt.py（重構）
 
 **功能**：訂閱 ROS2 topic，轉發到 MQTT broker
 
@@ -79,29 +242,39 @@ MachinePublisher (Node)
 ```
 Ros2MqttBridge (Node)
 ├── mqttClient_: mqtt.Client        # MQTT 客戶端
+├── factoryConfig_: FactoryConfig   # 組態（新增）
 ├── subscriptions: Dict[str, Sub]   # 多個 ROS2 訂閱
 ├── connectMqtt()                   # 連線（含重試機制）
 ├── onRos2Message()                 # 收到訊息後發布到 MQTT
 └── destroy_node()                  # 優雅關閉
 ```
 
-**Topic 對應**：
+**Topic 對應（重構後）**：
 | ROS2 Topic | MQTT Topic |
 |------------|------------|
-| `/factory/machine_01/status` | `factory/machine_01/status` |
-| `/factory/machine_02/status` | `factory/machine_02/status` |
-| `/factory/machine_03/status` | `factory/machine_03/status` |
+| `/factory/machine_01/temperature` | `factory/machine_01/temperature` |
+| `/factory/machine_01/vibration` | `factory/machine_01/vibration` |
+| `/factory/machine_01/operation_mode` | `factory/machine_01/operation_mode` |
+| ... | ... |
 
 **核心程式碼**：
 ```python
-# 動態建立多個 subscription（使用 lambda 捕捉變數）
-for ros2_topic, mqtt_topic in TOPIC_MAP.items():
-    self.create_subscription(
-        String,
-        ros2_topic,
-        lambda msg, t=mqtt_topic: self.onRos2Message(msg, t),
-        10
-    )
+# 使用 config 模組動態建立 subscription
+from config.config_loader import FactoryConfig
+from config.topic_resolver import getRos2Topic, getMqttTopic
+
+PARAMS = ["temperature", "vibration", "operation_mode"]
+
+for machine in self.factoryConfig_.machines:
+    for param in PARAMS:
+        ros2_topic = getRos2Topic(machine.machine_id, param)
+        mqtt_topic = getMqttTopic(machine.machine_id, param)
+        self.create_subscription(
+            String,
+            ros2_topic,
+            lambda msg, t=mqtt_topic: self.onRos2Message(msg, t),
+            10
+        )
 
 # 收到 ROS2 訊息後轉發到 MQTT（含錯誤處理）
 def onRos2Message(self, msg, mqtt_topic):
@@ -151,24 +324,11 @@ def main(args=None):
             rclpy.shutdown()
 ```
 
-### config.py
-
-組態設定模組：
-```python
-MQTT_BROKER_HOST = "10.255.255.254"
-MQTT_BROKER_PORT = 1883
-
-TOPIC_MAP = {
-    "/factory/machine_01/status": "factory/machine_01/status",
-    # ...
-}
-```
-
 ### Omniverse Extension（重構）
 
 **功能**：在 Omniverse 中訂閱 MQTT 訊息，接收工廠機台資料並更新 3D 場景
 
-**架構（重構後）**：
+**架構（04-29 版本）**：
 ```
 MqttClient（MQTT 通訊封裝）
 ├── connect() / disconnect()
@@ -182,11 +342,73 @@ BaseMqttExtension（抽象基底類別）
 └── onMqttMessage()             # 抽象方法
        ↑ 繼承
 FactoryTwinExtension（實作類別）
-├── onExtensionStartup()        # 初始化執行緒鎖
-├── onMqttMessage()             # 處理訊息、排隊更新
-├── onUpdate()                  # 主執行緒更新場景
-├── statusToColor()             # 狀態→顏色對應
-└── updateMachineColor()        # USD API 更新顏色
+├── machineInfos_: Dict[str, MachineInfo]  # 機台資訊
+├── factoryLog_: FactoryLog                # 日誌系統（新增）
+├── onExtensionStartup()                   # 初始化
+├── onMqttMessage()                        # 處理訊息、記錄日誌
+├── onUpdate()                             # 主執行緒更新場景
+└── updateMachineColor()                   # USD API 更新顏色
+
+MachineInfo（機台資訊，新增）
+├── machine_id: str
+├── usd_path: str
+└── calc_color(factoryLog, factoryConfig)  # 計算顏色
+
+FactoryLog / MachineLog（日誌系統，新增）
+├── record(machine_id, param, data)        # 記錄資料
+├── getLatestMode(machine_id)              # 取得最新模式
+└── getMachineLatestTopic(machine_id, param)  # 取得最新參數值
+```
+
+#### factory_log.py（日誌記錄系統，新增）
+
+**功能**：記錄機台參數的歷史資料，支援查詢最新值
+
+```python
+from collections import deque
+from datetime import datetime
+
+class MachineLog:
+    """單機日誌，使用固定大小循環緩衝區"""
+    MAX_ENTRIES = 50
+
+    def __init__(self):
+        self.entries_ = deque(maxlen=self.MAX_ENTRIES)
+
+    def append(self, param: str, data: dict):
+        timestamp = datetime.now()
+        self.entries_.append((timestamp, param, data))
+
+    def getLatestByTopic(self, param: str):
+        """從最新往回搜尋指定參數"""
+        for entry in reversed(self.entries_):
+            if entry[1] == param:
+                return entry
+        return None
+
+
+class FactoryLog:
+    """工廠日誌管理，管理多台機器"""
+
+    def __init__(self):
+        self.machines_: dict[str, MachineLog] = {}
+
+    def record(self, machine_id: str, param: str, data: dict):
+        if machine_id not in self.machines_:
+            self.machines_[machine_id] = MachineLog()
+        self.machines_[machine_id].append(param, data)
+
+    def getLatestMode(self, machine_id: str) -> str | None:
+        """取得機台最新操作模式"""
+        entry = self.getMachineLatestTopic(machine_id, "operation_mode")
+        if entry:
+            return entry[2].get("value")
+        return None
+
+    def getMachineLatestTopic(self, machine_id: str, param: str):
+        if machine_id not in self.machines_:
+            return None
+        return self.machines_[machine_id].getLatestByTopic(param)
 ```
 
 #### mqtt_client.py（MQTT 客戶端封裝）
@@ -274,7 +496,7 @@ class BaseMqttExtension(omni.ext.IExt):
         raise NotImplementedError  # 子類別必須實作
 ```
 
-#### extension.py（實作類別）
+#### extension.py（實作類別，04-29 版本）
 
 ```python
 import omni.kit.app
@@ -282,69 +504,97 @@ from pxr import Gf, UsdGeom
 import omni.usd
 import threading
 from .base_extension import BaseMqttExtension
+from .factory_log import FactoryLog
+from config.config_loader import FactoryConfig
+from config.topic_resolver import getAllMachinesMqttPattern, parseMqttTopic
 
-MACHINE_USD_PATHS = {
-    "factory/machine_01/status": "/World/Machine_01",
-    "factory/machine_02/status": "/World/Machine_02",
-    "factory/machine_03/status": "/World/Machine_03",
-}
+PARAMS = ["temperature", "vibration", "operation_mode"]
+
+
+class MachineInfo:
+    """機台資訊，負責計算顏色與透明度"""
+
+    def __init__(self, machine_id: str, usd_path: str):
+        self.machine_id_ = machine_id
+        self.usd_path_ = usd_path
+
+    def calc_color(self, factoryLog: FactoryLog, factoryConfig: FactoryConfig):
+        """根據日誌中的最新資料計算顏色"""
+        # 取得最新操作模式
+        mode = factoryLog.getLatestMode(self.machine_id_) or "RUNNING"
+
+        # 計算最高嚴重程度
+        max_severity = "NORMAL"
+        max_rank = 0
+
+        for param in ["temperature", "vibration"]:
+            entry = factoryLog.getMachineLatestTopic(self.machine_id_, param)
+            if entry:
+                value = entry[2].get("value")
+                if value is not None:
+                    severity, rank = factoryConfig.computeSeverity(param, value)
+                    if rank > max_rank:
+                        max_severity = severity
+                        max_rank = rank
+
+        # 根據模式和嚴重程度解析顏色
+        color = factoryConfig.resolveColor(mode, max_severity)
+        opacity = factoryConfig.getOpacity(mode)
+        return color, opacity
+
 
 class FactoryTwinExtension(BaseMqttExtension):
 
-    MQTT_BROKER_HOST = "localhost"
-    MQTT_BROKER_PORT = 1883
-    MQTT_TOPICS = list(MACHINE_USD_PATHS.keys())
+    MQTT_HOST = "localhost"
+    MQTT_PORT = 1883
+
+    def getMqttTopics(self) -> list[str]:
+        return [getAllMachinesMqttPattern()]  # "factory/#"
 
     def onExtensionStartup(self, ext_id):
-        self.pendingUpdates_ = {}
+        self.factoryConfig_ = FactoryConfig()
+        self.factoryLog_ = FactoryLog()
         self.lock_ = threading.Lock()
-        # 訂閱 Omniverse 更新事件（主執行緒）
+
+        # 建立 MachineInfo
+        self.machineInfos_ = {
+            m.machine_id: MachineInfo(m.machine_id, m.usd_prim_path)
+            for m in self.factoryConfig_.machines
+        }
+
+        # 訂閱 Omniverse 更新事件
         self.updateSub_ = omni.kit.app.get_app().get_update_event_stream()\
-            .create_subscription_to_pop(
-            self.onUpdate, name="factory_twin_update"
-        )
+            .create_subscription_to_pop(self.onUpdate, name="factory_twin_update")
 
     def onUpdate(self, event):
-        # 在主執行緒中安全更新 USD 場景
+        """主執行緒：計算每台機台的顏色並更新"""
         with self.lock_:
-            updates = dict(self.pendingUpdates_)  # 複製字典
-            self.pendingUpdates_.clear()
-        for usd_path, color in updates.items():
-            self.updateMachineColor(usd_path, color)
-
-    def onExtensionShutdown(self):
-        self.updateSub_ = None
+            for machine_id, info in self.machineInfos_.items():
+                color, opacity = info.calc_color(
+                    self.factoryLog_, self.factoryConfig_
+                )
+                self.updateMachineColor(info.usd_path_, color, opacity)
 
     def onMqttMessage(self, topic: str, data: dict):
-        # MQTT 執行緒中執行
-        usd_path = MACHINE_USD_PATHS.get(topic)
-        if not usd_path:
+        """MQTT 執行緒：解析 Topic 並記錄資料"""
+        result = parseMqttTopic(topic)
+        if not result:
             return
-        status = data.get("status", "unknown")
-        color = self.statusToColor(status)
+        machine_id, param = result
         with self.lock_:
-            self.pendingUpdates_[usd_path] = color
+            self.factoryLog_.record(machine_id, param, data)
 
-    def statusToColor(self, status: str) -> Gf.Vec3f:
-        colorMap = {
-            "running": Gf.Vec3f(0.0, 1.0, 0.0),  # 綠色
-            "warning": Gf.Vec3f(1.0, 1.0, 0.0),  # 黃色
-            "error": Gf.Vec3f(1.0, 0.0, 0.0),    # 紅色
-        }
-        return colorMap.get(status, Gf.Vec3f(0.5, 0.5, 0.5))  # 預設灰色
-
-    def updateMachineColor(self, usd_path: str, color: Gf.Vec3f):
+    def updateMachineColor(self, usd_path: str, color: list, opacity: float):
         try:
             stage = omni.usd.get_context().get_stage()
             prim = stage.GetPrimAtPath(usd_path)
             if not prim.IsValid():
-                print(f"[Factory Twin] Not found prim: {usd_path}")
                 return
-            UsdGeom.Gprim(prim).GetDisplayColorAttr().Set(
-                [(color[0], color[1], color[2])]
-            )
+            gprim = UsdGeom.Gprim(prim)
+            gprim.GetDisplayColorAttr().Set([Gf.Vec3f(*color)])
+            gprim.GetDisplayOpacityAttr().Set([opacity])
         except Exception as e:
-            print(f"[Factory Twin] Update color error: {usd_path} -> {e}")
+            print(f"[Factory Twin] Update error: {usd_path} -> {e}")
 ```
 
 ### Docker 基礎設施
@@ -403,7 +653,7 @@ services:
 | `get_update_event_stream()` | 取得更新事件串流 |
 | `create_subscription_to_pop()` | 訂閱更新事件（每幀呼叫） |
 
-### USD / pxr（新增）
+### USD / pxr
 
 | API | 用途 |
 |-----|------|
@@ -412,6 +662,7 @@ services:
 | `prim.IsValid()` | 檢查 Prim 是否存在 |
 | `UsdGeom.Gprim(prim)` | 將 Prim 轉為幾何物件 |
 | `GetDisplayColorAttr().Set()` | 設定顯示顏色 |
+| `GetDisplayOpacityAttr().Set()` | 設定顯示透明度（新增） |
 | `Gf.Vec3f(r, g, b)` | 3D 向量（RGB 顏色） |
 
 ### Python 標準庫
@@ -425,6 +676,27 @@ services:
 | `time` | `sleep()` | 延遲執行 |
 | `threading` | `Lock()` | 執行緒鎖 |
 | `typing` | `Callable`, `Optional` | 類型提示 |
+| `collections` | `deque(maxlen=N)` | 固定大小佇列（新增） |
+| `datetime` | `datetime.now()` | 取得當前時間（新增） |
+| `dataclasses` | `@dataclass` | 資料類別（新增） |
+
+### TOML 解析（新增）
+
+| 模組 | 版本 | 用途 |
+|------|------|------|
+| `tomllib` | Python 3.11+ | 內建 TOML 解析 |
+| `tomli` | Python < 3.11 | 第三方 TOML 解析 |
+
+```python
+# 相容寫法
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+
+with open("config.toml", "rb") as f:
+    config = tomllib.load(f)
+```
 
 ## Python 語法技巧
 
@@ -473,25 +745,51 @@ mosquitto_sub -h localhost -t "factory/#"
 2. 透過 ROS2 topic 發布資料
 3. 為 Omniverse 或其他視覺化平台提供資料來源
 
-**整合架構（v2）**：
+**整合架構（v3）**：
 ```
-machine_publisher.py (ROS2 Publisher)
-       ↓ ROS2 Topic
-ros2_to_mqtt.py (Bridge)
-       ↓ MQTT (Mosquitto Broker)
-       ↓
-┌──────┴──────────────────────────────────────┐
-│  Omniverse Extension                         │
-│                                              │
-│  MqttClient ──→ BaseMqttExtension            │
-│                      ↑ 繼承                  │
-│               FactoryTwinExtension           │
-│                      ↓                       │
-│              USD Scene Update                │
-│       (Machine_01/02/03 顏色變化)            │
-└──────────────────────────────────────────────┘
-       ↓
-  Omniverse 3D 視覺化（即時顏色反映狀態）
+┌─────────────────────────────────────────────────────────────┐
+│  config/                                                     │
+│  ├── machines.toml     （機台設定）                          │
+│  ├── thresholds.toml   （閾值設定）                          │
+│  ├── config_loader.py  （FactoryConfig、MachineConfig）      │
+│  └── topic_resolver.py （Topic 命名規則）                    │
+└─────────────────────────────────────────────────────────────┘
+                    ↓ 匯入
+┌─────────────────────────────────────────────────────────────┐
+│  ros2_publisher/                                             │
+│  ├── topic_data_generator.py  (MachineState、ScriptPhase)   │
+│  └── machine_publisher.py     (ROS2 Publisher)               │
+│                                                              │
+│  發布 Topics：                                               │
+│  /factory/machine_01/temperature                             │
+│  /factory/machine_01/vibration                               │
+│  /factory/machine_01/operation_mode                          │
+│  ...（4 台機台 × 3 個參數 = 12 個 Topic）                    │
+└─────────────────────────────────────────────────────────────┘
+                    ↓ ROS2 Topic
+┌─────────────────────────────────────────────────────────────┐
+│  bridge/ros2_to_mqtt.py                                      │
+│  （訂閱 ROS2 Topic → 轉發 MQTT）                             │
+└─────────────────────────────────────────────────────────────┘
+                    ↓ MQTT (Mosquitto Broker)
+┌─────────────────────────────────────────────────────────────┐
+│  omniverse_extension/                                        │
+│                                                              │
+│  MqttClient → BaseMqttExtension                              │
+│                    ↑ 繼承                                    │
+│            FactoryTwinExtension                              │
+│                    │                                         │
+│            ┌───────┴───────┐                                 │
+│            ↓               ↓                                 │
+│      FactoryLog      MachineInfo                             │
+│    （日誌記錄）    （顏色計算）                              │
+│                            ↓                                 │
+│                    USD Scene Update                          │
+│            (顏色 + 透明度根據嚴重程度變化)                   │
+└─────────────────────────────────────────────────────────────┘
+                    ↓
+           Omniverse 3D 視覺化
+     （4 台機台即時顏色/透明度反映狀態）
 ```
 
 ## 已完成
@@ -508,19 +806,29 @@ ros2_to_mqtt.py (Bridge)
 - [x] 抽象基底類別（BaseMqttExtension）
 - [x] 執行緒安全場景更新（Lock + pendingUpdates）
 - [x] USD 場景顏色更新（根據 status 變色）
+- [x] **組態模組化**（TOML 設定檔分離）
+- [x] **Topic 分割**（每參數獨立 Topic）
+- [x] **腳本式狀態模擬**（ScriptPhase、MachineState）
+- [x] **新增 machine_04**（狀態異常模擬機台）
+- [x] **日誌記錄系統**（FactoryLog、MachineLog）
+- [x] **嚴重程度計算**（NORMAL/WARNING/ERROR）
+- [x] **透明度控制**（根據操作模式）
+- [x] **外部 USD 資產整合**
 
 ## 待改進
 
-1. 增加更多感測器類型（電流、壓力等）
-2. 加入異常狀態的模擬邏輯
+1. ~~增加更多感測器類型~~ ✓ 已支援 temperature/vibration/operation_mode
+2. ~~加入異常狀態的模擬邏輯~~ ✓ machine_04 使用 ScriptPhase
 3. ~~與 Omniverse 整合測試~~ ✓ Extension 已建立
 4. ~~加入 Subscriber 節點接收控制指令~~ ✓ 已實作 Bridge
 5. MQTT → ROS2 反向橋接（控制指令）
 6. ~~Extension 連接 3D 場景物件~~ ✓ 已實作 USD 更新
-7. ~~根據感測器資料更新機台視覺狀態~~ ✓ 已實作顏色變化
-8. 根據溫度/振動值漸變顏色
+7. ~~根據感測器資料更新機台視覺狀態~~ ✓ 已實作顏色+透明度
+8. ~~根據溫度/振動值漸變顏色~~ ✓ 已實作嚴重程度計算
 9. 加入 UI 面板顯示即時數據
 10. 實作告警視覺效果（閃爍、發光）
+11. 增加更多感測器（電流、壓力、轉速）
+12. 持久化日誌（寫入檔案或資料庫）
 
 ## 相關頁面
 
